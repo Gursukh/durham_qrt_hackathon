@@ -26,7 +26,7 @@ const DEFAULT_CENTER = { lat: 51.507351, lng: -0.127758 }; // London
 // Example local style; replace with your cloud map style via mapId if preferred
 const DARK_STYLE = [
     { elementType: "geometry", stylers: [{ color: "#192063" }] },
-    { elementType: "geometry.stroke", stylers: [{ color: "#888888" }] },
+    { elementType: "geometry.stroke", stylers: [{ color: "#23B0FF" }] },
     { elementType: "labels.text.fill", stylers: [{ color: "#e0e0e0" }] },
     { elementType: "labels.text.stroke", stylers: [{ color: "#1f1f1f" }] },
     { featureType: "poi", stylers: [{ visibility: "off" }] },
@@ -50,7 +50,8 @@ export function FullscreenMap({
     const mapEl = useRef<HTMLDivElement | null>(null);
     const mapRef = useRef<google.maps.Map | null>(null);
     const markersRef = useRef<google.maps.Marker[]>([]);
-    const { locations, selectedId, setSelectedId } = useLocations();
+    const polylinesRef = useRef<google.maps.Polyline[]>([]);
+    const { locations, selectedId, startingLocations, setSelectedId } = useLocations();
 
     // Create map and markers when component mounts or locations change
     useEffect(() => {
@@ -79,12 +80,14 @@ export function FullscreenMap({
             mapRef.current = map;
 
             // Add markers from locations context (if any)
+            const bounds = new google.maps.LatLngBounds();
             if (Array.isArray(locations) && locations.length > 0) {
-                const bounds = new google.maps.LatLngBounds();
                 locations.forEach((feat) => {
-                    const coords = feat.geometry?.coordinates;
-                    // sample.json uses [lat, lng]
-                    const position = { lat: coords[0], lng: coords[1] };
+                    // new Feature shape exposes latitude/longitude at top-level
+                    const lat = feat.latitude;
+                    const lng = feat.longitude;
+                    if (lat == null || lng == null) return; // skip if missing
+                    const position = { lat, lng };
                     const marker = new google.maps.Marker({ position, map, opacity: 0.5 });
                     // attach loc id for later reference
                     (marker as any).__locId = feat.id;
@@ -97,16 +100,51 @@ export function FullscreenMap({
                     bounds.extend(position as google.maps.LatLngLiteral);
                     markersRef.current.push(marker);
                 });
+            }
 
-                // Fit map to markers if more than one
-                if (locations.length > 1) {
-                    map.fitBounds(bounds);
-                } else {
-                    // center on single marker
-                    const centerLatLng = bounds.getCenter();
-                    if (centerLatLng) map.setCenter(centerLatLng.toJSON());
-                    map.setZoom(6);
-                }
+            // Add blue pins for startingLocations (if any)
+            if (Array.isArray(startingLocations) && startingLocations.length > 0) {
+                startingLocations.forEach((start) => {
+                    const [lat, lng] = start.coordinates;
+                    const position = { lat, lng };
+
+                    // Use a blue-dot icon for starting locations. This is a commonly used
+                    // Google-hosted icon and keeps the marker visually distinct.
+                    const icon = {
+                        url: "https://cdn-icons-png.flaticon.com/512/6735/6735939.png",
+                        scaledSize: new google.maps.Size(64, 64),
+                    } as google.maps.Icon;
+
+                    const marker = new google.maps.Marker({
+                        position,
+                        map,
+                        icon,
+                        title: start.name,
+                        opacity: 1,
+                    });
+
+                    // mark this marker as a starting location for any future logic
+                    (marker as any).__isStarting = true;
+                    (marker as any).__startName = start.name;
+
+                    // optional: clicking a start pin recenters map
+                    // marker.addListener("click", () => {
+                    //     if (mapRef.current) mapRef.current.panTo(position as google.maps.LatLngLiteral);
+                    // });
+
+                    bounds.extend(position as google.maps.LatLngLiteral);
+                    markersRef.current.push(marker);
+                });
+            }
+
+            // Fit map to markers if more than one
+            const totalMarkers = markersRef.current.length;
+            if (totalMarkers > 1) {
+                map.fitBounds(bounds);
+            } else if (totalMarkers === 1) {
+                const centerLatLng = bounds.getCenter();
+                if (centerLatLng) map.setCenter(centerLatLng.toJSON());
+                map.setZoom(6);
             }
         })();
 
@@ -115,17 +153,22 @@ export function FullscreenMap({
             // cleanup markers
             markersRef.current.forEach((m) => m.setMap(null));
             markersRef.current = [];
+            // cleanup polylines
+            polylinesRef.current.forEach((p) => p.setMap(null));
+            polylinesRef.current = [];
             if (mapRef.current) {
                 // nothing special to do for map
                 mapRef.current = null;
             }
         };
-    }, [center.lat, center.lng, zoom, mapId, locations, setSelectedId]);
+    }, [center.lat, center.lng, zoom, mapId, locations, startingLocations, setSelectedId]);
 
-    // Update marker opacities and optionally pan the map when selection changes
+    // Update marker opacities and draw lines from startingLocations to the selected location
     useEffect(() => {
-        if (!markersRef.current) return;
+        // require a map to draw lines
+        if (!mapRef.current) return;
 
+        // update marker opacities and optionally pan the map when selection changes
         markersRef.current.forEach((marker) => {
             const id = (marker as any).__locId as string | undefined;
             const isSelected = id != null && selectedId === id;
@@ -133,8 +176,6 @@ export function FullscreenMap({
             try {
                 if (typeof (marker as any).setOpacity === "function") {
                     (marker as any).setOpacity(isSelected ? 1 : 0.5);
-                } else {
-                    // fallback: set icon with scaled opacity via CSS is hard here; ignore
                 }
             } catch (e) {
                 // ignore
@@ -144,7 +185,54 @@ export function FullscreenMap({
                 if (pos) mapRef.current.panTo(pos);
             }
         });
-    }, [selectedId]);
+
+        // clear any existing polylines before drawing new ones
+        polylinesRef.current.forEach((p) => p.setMap(null));
+        polylinesRef.current = [];
+
+        if (selectedId) {
+            // find the selected location from locations context
+            const selected = Array.isArray(locations) ? locations.find((l) => l.id === selectedId) : undefined;
+            if (selected && selected.latitude != null && selected.longitude != null && Array.isArray(startingLocations)) {
+                const bounds = new google.maps.LatLngBounds();
+                const selectedPos = { lat: selected.latitude, lng: selected.longitude } as google.maps.LatLngLiteral;
+
+                startingLocations.forEach((start) => {
+                    const [lat, lng] = start.coordinates;
+                    if (lat == null || lng == null) return;
+                    const startPos = { lat, lng } as google.maps.LatLngLiteral;
+
+                    const polyline = new google.maps.Polyline({
+                        path: [startPos, selectedPos],
+                        geodesic: true,
+                        strokeColor: "#4285F4",
+                        strokeOpacity: 0.9,
+                        strokeWeight: 3,
+                        map: mapRef.current!,
+                    });
+
+                    polylinesRef.current.push(polyline);
+                    bounds.extend(startPos);
+                    bounds.extend(selectedPos);
+                });
+
+                // Fit to show all lines if we drew any
+                if (polylinesRef.current.length > 0) {
+                    try {
+                        mapRef.current.fitBounds(bounds);
+                    } catch (e) {
+                        // ignore fit errors
+                    }
+                }
+            }
+        }
+
+        // cleanup when effect re-runs
+        return () => {
+            polylinesRef.current.forEach((p) => p.setMap(null));
+            polylinesRef.current = [];
+        };
+    }, [selectedId, locations, startingLocations]);
 
     return (
         <div className="fixed inset-0">
