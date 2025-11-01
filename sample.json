@@ -1,0 +1,262 @@
+[
+    {
+        "type": "Feature",
+        "geometry": {
+            "type": "Point",
+            "coordinates": [
+                51.4974644,
+                -0.142382
+            ]
+        },
+        "properties": {
+            "address": {
+                "name": "QRT Offices",
+                "line1": "9 Bressenden Place",
+                "town": "London",
+                "county": "London",
+                "postcode": "SW1E 5BY",
+                "country": "UK"
+            }
+        }
+    },
+    {
+        "type": "Feature",
+        "geometry": {
+            "type": "Point",
+            "coordinates": [
+                48.878074645,
+                2.31144404
+            ]
+        },
+        "properties": {
+            "address": {
+                "name": "QRT Offices",
+                "line1": "32 rue de Monceau,",
+                "town": "Paris",
+                "county": "Paris",
+                "postcode": "75008",
+                "country": "France"
+            }
+        }
+    },
+    {
+        "type": "Feature",
+        "geometry": {
+            "type": "Point",
+            "coordinates": [
+                22.2811236,
+                114.156802
+            ]
+        },
+        "properties": {
+            "address": {
+                "name": "QRT Offices",
+                "line1": "Queen's Road Central 28, Central Tower",
+                "town": "Hong Kong Island",
+                "county": "Hong Kong",
+                "postcode": "",
+                "country": "China"
+            }
+        }
+    },
+    {
+        "type": "Feature",
+        "geometry": {
+            "type": "Point",
+            "coordinates": [
+                1.2797808,
+                103.8515092
+            ]
+        },
+        "properties": {
+            "address": {
+                "name": "QRT Offices",
+                "line1": "2 Central Boulevard West Tower #47-01",
+                "town": "Singapore",
+                "county": "Singapore City",
+                "postcode": "018916",
+                "country": "Singapore"
+            }
+        }
+    },
+    {
+        "type": "Feature",
+        "geometry": {
+            "type": "Point",
+            "coordinates": [
+                19.07283,
+                72.88261
+            ]
+        },
+        "properties": {
+            "address": {
+                "name": "QRT Offices",
+                "line1": "8A, 8th floor Godrej one",
+                "town": "Mumbai",
+                "county": "Maharashtra",
+                "postcode": "400 079",
+                "country": "India"
+            }
+        }
+    },
+    {
+        "type": "Feature",
+        "geometry": {
+            "type": "Point",
+            "coordinates": [
+                25.2106,
+                55.27787
+            ]
+        },
+        "properties": {
+            "address": {
+                "name": "QRT Offices",
+                "line1": "Unit 1801, Level 18, East Entrance, Index Tower",
+                "town": "Dubai International Finance Centre",
+                "county": "Dubai",
+                "postcode": "",
+                "country": "UAE"
+            }
+        }
+    },
+    {
+        "type": "Feature",
+        "geometry": {
+            "type": "Point",
+            "coordinates": [
+                31.2234377,
+                121.5399259
+            ]
+        },
+        "properties": {
+            "address": {
+                "name": "QRT Offices",
+                "line1": "Units 4301-06&16, Two IFC",
+                "town": "Shanghai IFC",
+                "county": "Shanghai",
+                "postcode": "200120",
+                "country": "China"
+            }
+        }
+    },
+    {
+        "type": "Feature",
+        "geometry": {
+            "type": "Point",
+            "coordinates": [
+                47.372,
+                8.5413
+            ]
+        },
+        "properties": {
+            "address": {
+                "name": "QRT Offices",
+                "line1": "Brandschenkestrasse 5",
+                "town": "Zurich",
+                "county": "Zurich",
+                "postcode": "8001",
+                "country": "Switzerland"
+            }
+        }
+    },
+    {
+        "type": "Feature",
+        "geometry": {
+            "type": "Point",
+            "coordinates": [
+                46.2024,
+                6.145
+            ]
+        },
+        "properties": {
+            "address": {
+                "name": "QRT Offices",
+                "line1": "Cours de Rive 10",
+                "town": "Geneva",
+                "county": "Geneva",
+                "postcode": "1204",
+                "country": "Switzerland"
+            }
+        }
+    },
+    {
+        "type": "Feature",
+        "geometry": {
+            "type": "Point",
+            "coordinates": [
+                56.1541519,
+                10.20634460
+            ]
+        },
+        "properties": {
+            "address": {
+                "name": "QRT Offices",
+                "line1": "Soendergade 45",
+                "town": "Aarhus",
+                "county": "Aarhus",
+                "postcode": "8000",
+                "country": "Denmark"
+            }
+        }
+    },
+    {
+        "type": "Feature",
+        "geometry": {
+            "type": "Point",
+            "coordinates": [
+                -33.86924,
+                151.21115
+            ]
+        },
+        "properties": {
+            "address": {
+                "name": "QRT Offices",
+                "line1": "Aurora Place, Level 24",
+                "town": "Sydney",
+                "county": "New South Wales",
+                "postcode": "2000",
+                "country": "Australia"
+            }
+        }
+    },
+    {
+        "type": "Feature",
+        "geometry": {
+            "type": "Point",
+            "coordinates": [
+                51.1,
+                17.0333
+            ]
+        },
+        "properties": {
+            "address": {
+                "name": "QRT Offices",
+                "line1": "Infinity Building, 5th Floor",
+                "town": "Wroclaw",
+                "county": "Wroclaw",
+                "postcode": "53-673",
+                "country": "Poland"
+            }
+        }
+    },
+    {
+        "type": "Feature",
+        "geometry": {
+            "type": "Point",
+            "coordinates": [
+                47.523423,
+                19.0633943
+            ]
+        },
+        "properties": {
+            "address": {
+                "name": "QRT Offices",
+                "line1": "H2Offices building, 2nd floor, Vaci ut 23-27",
+                "town": "Budapest",
+                "county": "Budapest",
+                "postcode": "1134",
+                "country": "Hungary"
+            }
+        }
+    }
+]
