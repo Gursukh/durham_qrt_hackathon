@@ -447,8 +447,7 @@ function DetailsModal({ onClose, closing }: { onClose: () => void; closing?: boo
       <div className="bg-white rounded-xl p-4 py-2">
         <div className="pt-1">
           <div className="text-base font-semibold text-black mb-2">{"Travelers"}</div>
-
-          <div className="text-2xl w-fit ml-auto text-gray-700">{loc.total_co2 != null ? loc.total_co2.toFixed(2) + " kg CO₂" : "N/A"}</div>
+          {/* {loc.} */}
         </div>
       </div>
     </div>
