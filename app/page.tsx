@@ -338,7 +338,7 @@ export default function Home() {
                     </div>
                   </div>
                 )}
-              {error && <div className="text-sm text-red-600 mt-2">{error}</div>}
+              {error && <div className="text-sm text-red-600 mt-2">{"Something went wrong, try again!"}</div>}
             </div>
 
             <div className="flex gap-2 justify-end">
