@@ -221,7 +221,7 @@ export default function Home() {
             transform: detailsVisible && !detailsClosing ? "translateX(0)" : "translateX(120%)",
             transition: "transform 320ms ease-in-out",
           }}
-          className="absolute top-8 right-8 w-1/5 max-h-[80vh] overflow-auto p-2 pt-4 backdrop-blur-2xl rounded-xl shadow-lg pointer-events-auto"
+          className="absolute top-8 right-8 w-1/5 max-h-[95vh] overflow-auto p-2 pt-4 backdrop-blur-2xl rounded-xl shadow-lg pointer-events-auto"
         >
           <DetailsModal onClose={() => {
             // trigger closing animation then clear selection
@@ -384,7 +384,7 @@ function LocationListItem({ loc }: { loc: any }) {
 }
 
 function DetailsModal({ onClose, closing }: { onClose: () => void; closing?: boolean }) {
-  const { locations, selectedId } = useLocations();
+  const { locations, startingLocations, selectedId } = useLocations();
   const loc = locations.find((l) => l.id === selectedId);
 
 
@@ -423,7 +423,7 @@ function DetailsModal({ onClose, closing }: { onClose: () => void; closing?: boo
       <div className="bg-white rounded-xl p-4 py-2">
         <div className="pt-1">
           <div className="text-base font-semibold text-black mb-2">{"Schedule"}</div>
-          <div className="grid grid-cols-[auto_auto]">
+          <div className="text-sm grid grid-cols-[auto_auto]">
             <div className="text-sm text-gray-700 font-bold">{"Event Start "} </div>
             <div className="ml-auto text-gray-600"> {ds ? formatDateTimeNice(ds, true) : (loc.event_dates?.start ?? "N/A")}</div>
             <div className="text-sm text-gray-700 font-bold">{"Event End "} </div>
@@ -447,7 +447,26 @@ function DetailsModal({ onClose, closing }: { onClose: () => void; closing?: boo
       <div className="bg-white rounded-xl p-4 py-2">
         <div className="pt-1">
           <div className="text-base font-semibold text-black mb-2">{"Travelers"}</div>
-          {/* {loc.} */}
+          {startingLocations && startingLocations.map((startLoc, idx) => {
+            // find matching starting location info from loc.starting_locations by name
+            const matchingLoc = (loc.starting_locations as any[] || []).find((l) => l.name === startLoc.name);
+            const travelHours = matchingLoc?.travel_hours;
+            const co2 = matchingLoc?.total_co2;
+
+            return (
+              <div key={idx} className="mb-4 last:mb-0">
+                <div className="font-bold text-gray-800">{`${startLoc.name}, ${startLoc.numAttendees} attendees`}</div>
+                <div className="flex justify-between">
+                  <div className="text-sm text-gray-600">
+                    Average Travel Time: {travelHours != null ? travelHours.toFixed(2) + " hrs" : "N/A"}
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    Total CO₂: {co2 != null ? co2.toFixed(2) + " kg" : "N/A"}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

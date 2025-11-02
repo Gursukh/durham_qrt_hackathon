@@ -6,7 +6,7 @@ import path from "path";
 const TARGET = process.env.PROXY_TARGET ?? "http://localhost:5000/plan";
 
 // Debug flag: set the environment variable DEBUG=true (or DEBUG=1) to return sample.json
-const DEBUG = false
+const DEBUG = true
 
 const SAMPLE_PATH = path.join(process.cwd(), "sample.json");
 
