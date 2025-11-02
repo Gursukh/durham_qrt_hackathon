@@ -42,9 +42,9 @@ function PolylineTooltip({ start, selected }: { start: any; selected: any }) {
     const startName = start.name || "";
     const selectedName = selected.event_location || "";
     const travelTimeStringHoursMins = (selected.attendee_travel_hours[start.name] != null)
-      ? `${Math.floor(selected.attendee_travel_hours[start.name] ?? 0)}h ${Math.floor((selected.attendee_travel_hours[start.name] ?? 0) * 60) % 60}m`
-      : "N/A";
-    const isZurichGeneva = (startName === "Zurich" && selectedName === "Geneva" ) || (startName === "Geneva" && selectedName === "Zurich");
+        ? `${Math.floor(selected.attendee_travel_hours[start.name] ?? 0)}h ${Math.floor((selected.attendee_travel_hours[start.name] ?? 0) * 60) % 60}m`
+        : "N/A";
+    const isZurichGeneva = (startName === "Zurich" && selectedName === "Geneva") || (startName === "Geneva" && selectedName === "Zurich");
     return (
         <>
             <div className="flex justify-center items-center gap-4 text-black">
@@ -103,6 +103,8 @@ export function FullscreenMap({
     // regular location markers can change opacity when a selection is made
     const startMarkersRef = useRef<google.maps.Marker[]>([]);
     const locationMarkersRef = useRef<google.maps.Marker[]>([]);
+    // markers used to show intermediate airport hops (circle + code)
+    const hopMarkersRef = useRef<google.maps.Marker[]>([]);
     const infoWindowRef = useRef<google.maps.InfoWindow | null>(null);
     const polylinesRef = useRef<google.maps.Polyline[]>([]);
     const { locations, selectedId, startingLocations, setSelectedId } = useLocations();
@@ -138,7 +140,8 @@ export function FullscreenMap({
                         south: -85,
                         west: -180,
                         east: 180,
-                    }},
+                    }
+                },
             });
             mapRef.current = map;
 
@@ -208,7 +211,7 @@ export function FullscreenMap({
                     // new Feature shape exposes latitude/longitude at top-level
 
                     const office = (officies as any)[feat.event_location];
-                    console.log(office);
+
 
                     const lat = office.lat;
                     const lng = office.long;
@@ -246,6 +249,9 @@ export function FullscreenMap({
             startMarkersRef.current = [];
             locationMarkersRef.current.forEach((m) => m.setMap(null));
             locationMarkersRef.current = [];
+            // cleanup hop markers
+            hopMarkersRef.current.forEach((m) => m.setMap(null));
+            hopMarkersRef.current = [];
             // cleanup polylines
             polylinesRef.current.forEach((p) => p.setMap(null));
             polylinesRef.current = [];
@@ -282,6 +288,9 @@ export function FullscreenMap({
         // clear any existing polylines before drawing new ones
         polylinesRef.current.forEach((p) => p.setMap(null));
         polylinesRef.current = [];
+        // clear any existing hop markers
+        hopMarkersRef.current.forEach((m) => m.setMap(null));
+        hopMarkersRef.current = [];
 
         if (selectedId) {
             // find the selected location from locations context
@@ -390,23 +399,122 @@ export function FullscreenMap({
                     // special-case: if the start is Zurich and the selected event is Geneva,
                     // draw a straight line and show a train icon in the tooltip
                     const isZurichGeneva = ((start.name === "Zurich") && (selected.event_location === "Geneva")) ||
-                                           ((start.name === "Geneva") && (selected.event_location === "Zurich"));
+                        ((start.name === "Geneva") && (selected.event_location === "Zurich"));
 
-                    // compute arc (always bulging north) unless this is the special-case
-                    const path = isZurichGeneva
-                        ? [startPos, selectedPos]
-                        : computeArcPoints(startPos, selectedPos, 80, 0.25);
+                    // If the selected location provides attendee_routes for this start location,
+                    // build the polyline as a series of hops between the airports. Each route
+                    // element is expected to be [airportCode, long, lat]. Fall back to the
+                    // original arc/straight logic when routes are not available.
+                    let path: google.maps.LatLngLiteral[] = [];
+                    try {
+                        const routesForStart = (selected as any)?.attendee_routes?.[start.name];
+                        if (Array.isArray(routesForStart) && routesForStart.length > 0) {
+                            // Map each hop to LatLngLiteral (route element shape: {airport_code, latitude, longitude})
+                            const hopPoints: google.maps.LatLngLiteral[] = [];
+                            const hopInfos: { lat: number; lng: number; code?: string }[] = [];
+
+                            routesForStart.forEach((hop: any) => {
+                                const hopLat = parseFloat(hop["latitude"]);
+                                const hopLng = parseFloat(hop["longitude"]);
+                                const code = hop["airport_code"] || hop["airportCode"] || hop["code"] || "";
+                                if (!isNaN(hopLat) && !isNaN(hopLng)) {
+                                    hopPoints.push({ lat: hopLat, lng: hopLng });
+                                    hopInfos.push({ lat: hopLat, lng: hopLng, code });
+                                }
+                            });
+
+                            // Ensure route includes start and selected endpoints
+                            if (hopPoints.length === 0) {
+                                path = [startPos, selectedPos];
+                            } else {
+                                // Prepend start if first hop isn't the start position
+                                const firstHop = hopPoints[0];
+                                const lastHop = hopPoints[hopPoints.length - 1];
+                                const near = (a: google.maps.LatLngLiteral, b: google.maps.LatLngLiteral) => {
+                                    return Math.abs(a.lat - b.lat) < 1e-4 && Math.abs(a.lng - b.lng) < 1e-4;
+                                };
+                                if (!near(startPos, firstHop)) {
+                                    hopPoints.unshift(startPos);
+                                }
+                                if (!near(lastHop, selectedPos)) {
+                                    hopPoints.push(selectedPos);
+                                }
+
+                                // Build arc segments between consecutive hop points and concatenate.
+                                // This creates a smooth curved route through each hop (start -> hop1 -> hop2 -> ... -> selected).
+                                const segments: google.maps.LatLngLiteral[] = [];
+                                for (let i = 0; i < hopPoints.length - 1; i++) {
+                                    const a = hopPoints[i];
+                                    const b = hopPoints[i + 1];
+                                    // fewer points for short segments, more for longer ones could be adaptive;
+                                    const seg = computeArcPoints(a, b, 80, 0.25);
+                                    if (i === 0) {
+                                        segments.push(...seg);
+                                    } else {
+                                        // skip first point to avoid duplicate vertex at joins
+                                        segments.push(...seg.slice(1));
+                                    }
+                                }
+                                path = segments.length > 0 ? segments : [startPos, selectedPos];
+
+                                // Create visual markers (circle + code) for intermediate hops (exclude start & selected)
+                                const createAirportIcon = (code: string, size = 36) => {
+                                    const safeCode = (code || "").toString();
+                                    const svg = `<?xml version='1.0' encoding='UTF-8'?>\n<svg xmlns='http://www.w3.org/2000/svg' width='${size}' height='${size}' viewBox='0 0 ${size} ${size}'>\n  <circle cx='${size / 2}' cy='${size / 2}' r='${Math.floor(size / 2) - 3}' fill='#ffffff' stroke='#a43ef7' stroke-width='3'/>\n  <text x='${size / 2}' y='${Math.floor(size / 2 + 5)}' font-family='Arial, Helvetica, sans-serif' font-weight='700' font-size='12' text-anchor='middle' fill='#111'>${safeCode}</text>\n</svg>`;
+                                    return {
+                                        url: 'data:image/svg+xml;utf8,' + encodeURIComponent(svg),
+                                        scaledSize: new google.maps.Size(size, size),
+                                        anchor: new google.maps.Point(size / 2, size / 2),
+                                    } as google.maps.Icon;
+                                };
+
+                                // add markers only for intermediate hops (exclude start & selected positions)
+                                const intermediates = hopInfos.filter((info) => {
+                                    const p = { lat: info.lat, lng: info.lng } as google.maps.LatLngLiteral;
+                                    return !near(p, startPos) && !near(p, selectedPos);
+                                });
+
+                                if (intermediates.length > 0) {
+                                    intermediates.forEach((info) => {
+                                        const pos = { lat: info.lat, lng: info.lng } as google.maps.LatLngLiteral;
+                                        const code = (info.code || "").toString().toUpperCase().slice(0, 5);
+                                        const icon = createAirportIcon(code, 34);
+                                        try {
+                                            const hopMarker = new google.maps.Marker({
+                                                position: pos,
+                                                map: mapRef.current!,
+                                                icon,
+                                                clickable: false,
+                                                zIndex: 1000,
+                                            });
+                                            hopMarkersRef.current.push(hopMarker);
+                                        } catch (e) {
+                                            // ignore marker creation failures
+                                        }
+                                    });
+                                }
+                            }
+                        } else {
+                            path = isZurichGeneva
+                                ? [startPos, selectedPos]
+                                : computeArcPoints(startPos, selectedPos, 80, 0.25);
+                        }
+                    } catch (e) {
+                        // on any error fall back to previous behavior
+                        path = isZurichGeneva
+                            ? [startPos, selectedPos]
+                            : computeArcPoints(startPos, selectedPos, 80, 0.25);
+                    }
 
                     const polyline = new google.maps.Polyline({
                         path,
-                        // keep as straight segment for Zurich->Geneva special case
+                        // When drawing multiple hops, allow geodesic segments between hops
                         geodesic: false,
                         strokeColor: "#a43ef7",
                         strokeOpacity: 0.9,
                         strokeWeight: 5.0,
                         map: mapRef.current!,
                     });
-                    console.log(start.numAttendees)
 
                     // Attach a hover tooltip to the polyline showing start info, attendee count and total cost
                     // Ensure an InfoWindow exists to reuse for hover tooltips
@@ -453,6 +561,8 @@ export function FullscreenMap({
         return () => {
             polylinesRef.current.forEach((p) => p.setMap(null));
             polylinesRef.current = [];
+            hopMarkersRef.current.forEach((m) => m.setMap(null));
+            hopMarkersRef.current = [];
         };
     }, [selectedId, locations, startingLocations]);
 

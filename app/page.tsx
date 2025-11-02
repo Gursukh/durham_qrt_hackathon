@@ -64,13 +64,83 @@ export default function Home() {
     }
   }, [selectedId]);
 
+  // Partition locations into: Most Environmental (min total_co2),
+  // Least Travel Time (min average_travel_hours, preferring a different location),
+  // and Others. We prefer unique picks: if the same location is both min CO2
+  // and min travel, the travel pick will prefer the next-best location when
+  // available.
+  const { mostEnvironmental, leastTravel, shortestSpan, others } = (() => {
+    if (!locations || locations.length === 0) return { mostEnvironmental: null, leastTravel: null, others: [] };
+
+    // find min CO2 (if available)
+    const withCO2 = locations.filter((l) => l?.total_co2 != null);
+    let minCO2Id: string | null = null;
+    if (withCO2.length) {
+      let min = withCO2[0];
+      for (const l of withCO2) {
+        if (Number(l.total_co2) < Number(min.total_co2)) min = l;
+      }
+      minCO2Id = min.id;
+    }
+
+    // find min travel, preferring a different id than minCO2Id when possible
+    const withTravel = locations.filter((l) => l?.average_travel_hours != null);
+    let minTravelId: string | null = null;
+    if (withTravel.length) {
+      // try excluding minCO2Id first to ensure uniqueness
+      const candidates = minCO2Id ? withTravel.filter((l) => l.id !== minCO2Id) : withTravel;
+      const pickFrom = candidates.length ? candidates : withTravel;
+      let min = pickFrom[0];
+      for (const l of pickFrom) {
+        if (Number(l.average_travel_hours) < Number(min.average_travel_hours)) min = l;
+      }
+      minTravelId = min.id;
+    }
+
+    const mostEnvironmental = minCO2Id ? locations.find((l) => l.id === minCO2Id) ?? null : null;
+    const leastTravel = minTravelId ? locations.find((l) => l.id === minTravelId) ?? null : null;
+
+    // find shortest event span (end - start) where both span start and end are present
+    const withSpan = locations.filter((l) => {
+      const rawSpanStart = l?.event_span?.start ?? l?.span_start ?? null;
+      const rawSpanEnd = l?.event_span?.end ?? l?.span_end ?? null;
+      const s = parseDate(rawSpanStart);
+      const e = parseDate(rawSpanEnd);
+      return !!s && !!e;
+    });
+
+    let minSpanId: string | null = null;
+    if (withSpan.length) {
+      let min = withSpan[0];
+      let minDiff = Infinity;
+      for (const l of withSpan) {
+        const s = parseDate(l.event_span?.start ?? l.span_start);
+        const e = parseDate(l.event_span?.end ?? l.span_end);
+        if (!s || !e) continue;
+        const diff = Math.abs(e.getTime() - s.getTime());
+        if (diff < minDiff) {
+          minDiff = diff;
+          min = l;
+        }
+      }
+      minSpanId = min.id;
+    }
+
+    const shortestSpan = minSpanId ? locations.find((l) => l.id === minSpanId) ?? null : null;
+
+    // exclude chosen ids from others to keep picks unique
+    const others = locations.filter((l) => l.id !== minCO2Id && l.id !== minTravelId && l.id !== minSpanId);
+
+    return { mostEnvironmental, leastTravel, shortestSpan, others };
+  })();
+
   return (
-    <div className="w-screen h-screen bg-background relative ">
+    <div className="w-screen h-screen bg-background relative overflow-hidden ">
       <FullscreenMap />
 
       {/* Setup meeting button top-left */}
       {showSetupButton && (
-        <div className="absolute top-8 left-8">
+        <div className="absolute top-8 left-8 ">
           <button
             onClick={() => {
               setError(null);
@@ -79,7 +149,7 @@ export default function Home() {
             }}
             className="px-4 py-2 rounded-xl bg-sky-600 text-white text-2xl font-semibold"
           >
-            Setup meeting
+            Setup Meeting
           </button>
         </div>
       )}
@@ -435,7 +505,7 @@ export default function Home() {
                           body: JSON.stringify(parsed),
                         });
 
-                        
+
 
                         if (!res.ok) {
                           const txt = await res.text();
@@ -576,15 +646,74 @@ export default function Home() {
           id="locations_box"
           // animate off-screen left when detailsVisible is true
           style={{
-            transform: detailsVisible && !detailsClosing ? "translateX(-120%)" : "translateX(0)",
+            transform: detailsVisible && !detailsClosing ? "translateX(120%)" : "translateX(0)",
             transition: "transform 320ms ease-in-out",
           }}
-          className="absolute top-8 right-8 max-h-[80vh] w-1/5 overflow-auto p-2 pt-4 backdrop-blur-2xl rounded-xl shadow-lg flex flex-col items-center "
+          className="absolute top-8 right-8 max-h-[95vh] w-1/5 gap-2 p-2 pt-4 backdrop-blur-2xl rounded-xl shadow-lg flex flex-col items-center "
         >
           <p className="font-bold text-3xl text-shadow-xs mb-8">Suggested Locations</p>
-          {locations.map((loc) => (
-            <LocationListItem key={loc.event_location + loc.event_dates.start} loc={loc} />
-          ))}
+          {/* Highlighted groups: Most Environmental (min CO2), Least Travel Time (min travel), Others */}
+          {mostEnvironmental ? (
+            <div className="w-full mb-3">
+              <div className="flex items-center gap-4 mx-3 mb-2">
+
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" className="bi bi-leaf " viewBox="0 0 16 16">
+                  <path d="M1.4 1.7c.216.289.65.84 1.725 1.274 1.093.44 2.884.774 5.834.528l.37-.023c1.823-.06 3.117.598 3.956 1.579C14.16 6.082 14.5 7.41 14.5 8.5c0 .58-.032 1.285-.229 1.997q.198.248.382.54c.756 1.2 1.19 2.563 1.348 3.966a1 1 0 0 1-1.98.198c-.13-.97-.397-1.913-.868-2.77C12.173 13.386 10.565 14 8 14c-1.854 0-3.32-.544-4.45-1.435-1.125-.887-1.89-2.095-2.391-3.383C.16 6.62.16 3.646.509 1.902L.73.806zm-.05 1.39c-.146 1.609-.008 3.809.74 5.728.457 1.17 1.13 2.213 2.079 2.961.942.744 2.185 1.22 3.83 1.221 2.588 0 3.91-.66 4.609-1.445-1.789-2.46-4.121-1.213-6.342-2.68-.74-.488-1.735-1.323-1.844-2.308-.023-.214.237-.274.38-.112 1.4 1.6 3.573 1.757 5.59 2.045 1.227.215 2.21.526 3.033 1.158.058-.39.075-.782.075-1.158 0-.91-.288-1.988-.975-2.792-.626-.732-1.622-1.281-3.167-1.229l-.316.02c-3.05.253-5.01-.08-6.291-.598a5.3 5.3 0 0 1-1.4-.811" />
+                </svg>
+                <div className="text-xl text-shadow-2xs font-semibold ">Most Environmental</div>
+              </div>
+              <LocationListItem key={mostEnvironmental.id} loc={mostEnvironmental} />
+            </div>
+          ) : null}
+
+          {leastTravel ? (
+            <div className="w-full mb-3">
+              <div className="flex items-center gap-4 mx-3 mb-2">
+
+   
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0" />
+                  <path d="M12 7v5l3 3" />
+                </svg>
+
+                <div className="text-xl text-shadow-2xs font-semibold">Least Travel Time</div>
+              </div>
+              <LocationListItem key={leastTravel.id} loc={leastTravel} />
+            </div>
+          ) : null}
+
+          {shortestSpan ? (
+            <div className="w-full mb-3">
+              <div className="flex items-center gap-4 mx-3 mb-2">
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="bi bi-calendar-range-fill" viewBox="0 0 16 16">
+  <path d="M4 .5a.5.5 0 0 0-1 0V1H2a2 2 0 0 0-2 2v1h16V3a2 2 0 0 0-2-2h-1V.5a.5.5 0 0 0-1 0V1H4zM16 7V5H0v5h5a1 1 0 1 1 0 2H0v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9h-6a1 1 0 1 1 0-2z"/>
+</svg>
+                <div className="text-xl text-shadow-2xs font-semibold">Shortest Span</div>
+              </div>
+              <LocationListItem key={shortestSpan.id} loc={shortestSpan} />
+            </div>
+          ) : null}
+
+          {others && others.length > 0 ? (
+            <div className="w-full">
+              <div className="text-xl ml-1 text-shadow-2xs font-semibold mb-2">Other Routes</div>
+              <div className="space-y-2">
+                {others.map((loc) => (
+                  <LocationListItem key={loc.id} loc={loc} />
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       }
 
@@ -606,7 +735,7 @@ export default function Home() {
             transform: detailsVisible && !detailsClosing ? "translateX(0)" : "translateX(120%)",
             transition: "transform 320ms ease-in-out",
           }}
-          className="absolute top-8 right-8 w-1/5 max-h-[95vh] overflow-auto p-2 pt-4 backdrop-blur-2xl rounded-xl shadow-lg pointer-events-auto"
+          className="absolute  top-8 right-8 w-1/5 max-h-[95vh] overflow-auto p-2 pt-4 backdrop-blur-2xl rounded-xl shadow-lg pointer-events-auto"
         >
           <DetailsModal onClose={() => {
             // trigger closing animation then clear selection

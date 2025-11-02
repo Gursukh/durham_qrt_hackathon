@@ -75,11 +75,50 @@ async function proxy(request: Request) {
 
     const contentType = res.headers.get("content-type") || "";
 
-    // If JSON, parse and return via NextResponse.json to preserve JSON content-type
-    if (contentType.includes("application/json")) {
-      const json = await res.json();
-      console.log(json)
-      return NextResponse.json(json, { status: res.status, headers: responseHeaders });
+      // If JSON, parse, sort any lists by total_score, and return via NextResponse.json
+      if (contentType.includes("application/json")) {
+        let json = await res.json();
+
+        // Helper: coerce a value to number if possible
+        const toNumber = (v: any) => {
+          if (typeof v === "number") return v;
+          if (typeof v === "string") {
+            const n = Number(v);
+            return Number.isFinite(n) ? n : NaN;
+          }
+          return NaN;
+        };
+
+        // Sort an array of objects by total_score (or totalScore) desc. Non-numeric treated as -Infinity.
+        const sortArrayByTotalScore = (arr: any[]) =>
+          arr.slice().sort((a, b) => {
+            const aScore = toNumber(a?.total_score ?? a?.totalScore ?? NaN);
+            const bScore = toNumber(b?.total_score ?? b?.totalScore ?? NaN);
+            const aVal = Number.isFinite(aScore) ? aScore : -Infinity;
+            const bVal = Number.isFinite(bScore) ? bScore : -Infinity;
+            return bVal - aVal; // descending
+          }).reverse().slice(0, 5);
+
+        // If root is an array of objects with total_score, sort it. If root is an object,
+        // sort any top-level properties that are arrays of objects with total_score.
+        const shouldSortArray = (arr: any[]) =>
+          arr.length > 0 && arr.every((i) => typeof i === "object" && i !== null && ("total_score" in i || "totalScore" in i));
+
+        let out = json;
+        if (Array.isArray(json)) {
+          if (shouldSortArray(json)) out = sortArrayByTotalScore(json);
+        } else if (json && typeof json === "object") {
+          // shallow clone top-level to avoid mutating original
+          out = { ...json } as Record<string, any>;
+          for (const k of Object.keys(out)) {
+            const v = out[k];
+            if (Array.isArray(v) && shouldSortArray(v)) {
+              out[k] = sortArrayByTotalScore(v);
+            }
+          }
+        }
+
+        return NextResponse.json(out, { status: res.status, headers: responseHeaders });
     }
 
     // For other content-types return raw body

@@ -37,7 +37,7 @@ export default function DetailsModal({ onClose, closing }: { onClose: () => void
       }
 
       try {
-        const srcs = await getImageSrcs(office.line1, { key, cx, num: 5 });
+        const srcs = await getImageSrcs(`${office.town} `, { key, cx, num: 5 });
         if (!cancelled) setImages(srcs);
         // Filter out instagram urls
         setImages((prev) => prev.filter((src) => !src.includes("instagram.com")));
@@ -70,13 +70,13 @@ export default function DetailsModal({ onClose, closing }: { onClose: () => void
       <div className="flex items-center justify-between mb-7">
         <button
           onClick={onClose}
-          className=" text-sm text-sky-600 hover:underline bg-white rounded-full px-2 py-1 flex items-center"
+          className=" text-md text-sky-600 hover:underline bg-white rounded-full px-2 py-1 mt-2 flex items-center"
         >
           {"< Back"}
         </button>
-        <div className="absolute left-1/2 transform -translate-x-1/2 top-5 flex-1 text-center text-4xl text-white font-bold text-shadow-xs">{loc.event_location}</div>
+        <div className="absolute right-6 top-5 flex-1 text-center text-4xl text-white font-bold text-shadow-xs whitespace-nowrap">{loc.event_location}</div>
       </div>
-
+      
       {(
         <div className="h-[200px] w-full flex gap-4 overflow-x-scroll rounded-xl overflow-hidden">
           {images.map((src, i) => (
@@ -87,7 +87,7 @@ export default function DetailsModal({ onClose, closing }: { onClose: () => void
               loading="lazy"
               onLoad={() => setLoadedMap((p) => ({ ...p, [i]: true }))}
               onError={() => setLoadedMap((p) => ({ ...p, [i]: true }))}
-              className={`w-auto h-full object-cover rounded transition-opacity duration-700 ease-out transform ${loadedMap[i] ? "opacity-100 scale-100" : "opacity-0 scale-95"}`}
+              className={`w-auto h-full object-cover rounded-xl transition-opacity duration-700 ease-out transform ${loadedMap[i] ? "opacity-100 scale-100" : "opacity-0 scale-95"}`}
             />
           ))}
         </div>
@@ -119,9 +119,31 @@ export default function DetailsModal({ onClose, closing }: { onClose: () => void
 
       <div className="bg-white rounded-xl p-4 py-2">
         <div className="pt-1">
-          <div className="text-base font-semibold text-black mb-2 border-b border-gray-300">{"Total Carbon Dioxide Emissions"}</div>
+          <div className="text-base font-semibold text-black mb-2 border-b border-gray-300">{"Carbon Dioxide Emissions"}</div>
 
-          <div className="text-2xl w-fit ml-auto text-gray-700">{loc.total_co2 != null ? loc.total_co2.toFixed(2) + " kg CO₂" : "N/A"}</div>
+          {startingLocations && startingLocations.map((startLoc, idx) => {
+            // find matching starting location info from loc.starting_locations by name
+            const travelHours = loc.attendee_travel_hours[startLoc.name];
+
+            return (
+              <div key={idx} className="mb-4 last:mb-0">
+                <div className="flex justify-between">
+                <div className="font-bold text-gray-800">{`${startLoc.name}`}</div>
+                  <div className="text-sm text-gray-600">
+                    {loc.attendee_co2[startLoc.name] != null
+                      ? `${loc.attendee_co2[startLoc.name].per_attendee} tonnes CO₂`
+                      : "N/A"}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+
+          <div className="flex justify-between">
+
+          <div className="text-2xl w-fit font-bold text-black">Total</div>
+          <div className="text-2xl w-fit  text-gray-700">{loc.total_co2 != null ? loc.total_co2.toFixed(2) + " tonnes of CO₂" : "N/A"}</div>
+          </div>
         </div>
       </div>
 
