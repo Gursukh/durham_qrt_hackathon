@@ -8,7 +8,7 @@ import DetailsModal from "./DetailsModel";
 import { ordinalSuffix, parseDate, formatDateTimeNice, formatTimeOnly } from "./dateutils";
 
 export default function Home() {
-  const { locations, selectedId, setStartingLocations, setLocations, setSelectedId, setEventDuration, setAvailabilityWindow } = useLocations();
+  const { locations, selectedId, startingLocations, setStartingLocations, setLocations, setSelectedId, setEventDuration, setAvailabilityWindow } = useLocations();
   const [showSetup, setShowSetup] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
@@ -30,6 +30,8 @@ export default function Home() {
   ]);
   const [formEventDuration, setFormEventDuration] = useState<{ days?: number; hours?: number; minutes?: number }>({});
   const [formAvailability, setFormAvailability] = useState<{ start?: string; end?: string }>({});
+  // include non-QRT locations toggle -> maps to `airports` boolean in submitted JSON
+  const [formIncludeNonQrt, setFormIncludeNonQrt] = useState<boolean>(false);
   const MAX_LOCATIONS = 13;
 
   // helper to format stored availability strings into a value acceptable by
@@ -83,16 +85,36 @@ export default function Home() {
       minCO2Id = min.id;
     }
 
-    // find min travel, preferring a different id than minCO2Id when possible
-    const withTravel = locations.filter((l) => l?.average_travel_hours != null);
+    // find min combined travel hours across all starting locations (preferring a different id than minCO2Id when possible)
+    // Combined travel hours = sum_over_starting_locations( travel_hours_from_start * numAttendees )
+    // If per-start travel times are not available for a location, fall back to average_travel_hours.
     let minTravelId: string | null = null;
-    if (withTravel.length) {
-      // try excluding minCO2Id first to ensure uniqueness
-      const candidates = minCO2Id ? withTravel.filter((l) => l.id !== minCO2Id) : withTravel;
-      const pickFrom = candidates.length ? candidates : withTravel;
+    const hasStarts = Array.isArray(startingLocations) && startingLocations.length > 0;
+    const travelCandidates = locations.filter((l) => l != null && (l.attendee_travel_hours != null || l.average_travel_hours != null));
+    if (travelCandidates.length) {
+      // do NOT exclude the min-CO2 pick here; allow the same location to be chosen for multiple categories
+      const pickFrom = travelCandidates;
+
+      const computeCombined = (loc: any) => {
+        if (!hasStarts) return Number(loc.average_travel_hours) ?? Infinity;
+        let sum = 0;
+        for (const s of startingLocations!) {
+          const per = loc.attendee_travel_hours && typeof loc.attendee_travel_hours === "object" ? loc.attendee_travel_hours[s.name] : undefined;
+          const perNum = per != null ? Number(per) : (loc.average_travel_hours != null ? Number(loc.average_travel_hours) : 0);
+          const count = Number(s.numAttendees) || 0;
+          sum += perNum * count;
+        }
+        return sum;
+      };
+
       let min = pickFrom[0];
+      let minVal = computeCombined(min);
       for (const l of pickFrom) {
-        if (Number(l.average_travel_hours) < Number(min.average_travel_hours)) min = l;
+        const v = computeCombined(l);
+        if (v < minVal) {
+          min = l;
+          minVal = v;
+        }
       }
       minTravelId = min.id;
     }
@@ -128,8 +150,12 @@ export default function Home() {
 
     const shortestSpan = minSpanId ? locations.find((l) => l.id === minSpanId) ?? null : null;
 
-    // exclude chosen ids from others to keep picks unique
-    const others = locations.filter((l) => l.id !== minCO2Id && l.id !== minTravelId && l.id !== minSpanId);
+    // Exclude chosen ids from `others` so "Other Routes" contains only non-highlighted locations
+    const excludeIds = new Set<string>();
+    if (mostEnvironmental && mostEnvironmental.id) excludeIds.add(mostEnvironmental.id);
+    if (leastTravel && leastTravel.id) excludeIds.add(leastTravel.id);
+    if (shortestSpan && shortestSpan.id) excludeIds.add(shortestSpan.id);
+    const others = locations.filter((l) => !excludeIds.has(l.id));
 
     return { mostEnvironmental, leastTravel, shortestSpan, others };
   })();
@@ -179,120 +205,139 @@ export default function Home() {
                   Fill form
                 </button>
               </div>
+
               <div className="text-xs text-gray-600 mb-1">Paste an array of starting locations (or an object containing a startingLocations array)</div>
               {inputMode === "json" ? (
-                <textarea
-                  value={jsonText}
-                  onChange={(e) => setJsonText(e.target.value)}
-                  className="w-full h-40 border p-2 text-xs"
-                  placeholder='e.g. [{"name":"Office","coordinates":[51.5,-0.1],"numAttendees":3}]'
-                />
-              ) : (
-                <div className="w-full border p-2 text-xs space-y-2 bg-gray-50 rounded">
-                  <div className="font-medium">Starting locations <span className="text-xs text-gray-500">({formLocations.length}/{MAX_LOCATIONS})</span></div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {formLocations.map((loc, idx) => (
-                      <div key={idx} className="p-2 border rounded bg-white flex items-center justify-between gap-2">
-                        <select
-                          className="flex-1 border px-2 py-1 text-xs"
-                          value={loc.name ?? ""}
-                          onChange={(e) => {
-                            const copy = [...formLocations];
-                            copy[idx] = { ...copy[idx], name: e.target.value };
-                            setFormLocations(copy);
-                          }}
-                        >
-                          <option value="">-- select office --</option>
-                          {
-                            // compute options that aren't already selected by other rows
-                            Object.keys(officies)
-                              .filter((k) => !formLocations.some((f, i2) => i2 !== idx && f.name === k))
-                              .map((k) => (
-                                <option key={k} value={k}>{k}</option>
-                              ))
-                          }
-                        </select>
-                        <input
-                          className="w-20 border px-2 py-1 text-xs"
-                          placeholder="#"
-                          value={String(loc.numAttendees ?? 0)}
-                          onChange={(e) => {
-                            const v = Number(e.target.value);
-                            const copy = [...formLocations];
-                            copy[idx] = { ...copy[idx], numAttendees: isNaN(v) ? 0 : Math.max(0, Math.floor(v)) };
-                            setFormLocations(copy);
-                          }}
-                        />
-                        <button
-                          className="px-2 py-1 text-xs border rounded"
-                          onClick={() => {
-                            const copy = [...formLocations];
-                            copy.splice(idx, 1);
-                            setFormLocations(copy.length ? copy : [{ name: "", numAttendees: 0 }]);
-                          }}
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                  <div>
-                    <button
-                      className={`px-3 py-1 rounded ${formLocations.length >= MAX_LOCATIONS ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-gray-200 text-xs'}`}
-                      onClick={() => {
-                        if (formLocations.length >= MAX_LOCATIONS) return;
-                        setFormLocations([...formLocations, { name: "", numAttendees: 0 }]);
-                      }}
-                      disabled={formLocations.length >= MAX_LOCATIONS}
-                    >
-                      + Add location
-                    </button>
-                    <button
-                      className="ml-2 px-3 py-1 rounded bg-gray-200 text-xs"
-                      onClick={() => {
-                        // populate with all offices from officies.json
-                        const all = Object.keys(officies).map((k) => ({ name: k, numAttendees: 0 }));
-                        // cap to MAX_LOCATIONS
-                        const capped = all.slice(0, MAX_LOCATIONS);
-                        setFormLocations(capped.length ? capped : [{ name: "", numAttendees: 0 }]);
-                      }}
-                    >
-                      Use all offices
-                    </button>
-                  </div>
-
-                  <div className="mt-2 grid grid-cols-2 gap-2">
+                <>
+                  {isProcessing ? (
+                    <LoadingSpinner />
+                  ) : (
+                    <textarea
+                      value={jsonText}
+                      onChange={(e) => setJsonText(e.target.value)}
+                      className="w-full h-40 border p-2 text-xs"
+                      placeholder='e.g. [{"name":"Office","coordinates":[51.5,-0.1],"numAttendees":3}]'
+                    />)}
+                </>
+              )
+                : (
+                  <div className="w-full border p-2 text-xs space-y-2 bg-gray-50 rounded">
+                    <div className="font-medium">Starting locations <span className="text-xs text-gray-500">({formLocations.length}/{MAX_LOCATIONS})</span></div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {formLocations.map((loc, idx) => (
+                        <div key={idx} className="p-2 border rounded bg-white flex items-center justify-between gap-2">
+                          <select
+                            className="flex-1 border px-2 py-1 text-xs"
+                            value={loc.name ?? ""}
+                            onChange={(e) => {
+                              const copy = [...formLocations];
+                              copy[idx] = { ...copy[idx], name: e.target.value };
+                              setFormLocations(copy);
+                            }}
+                          >
+                            <option value="">-- select office --</option>
+                            {
+                              // compute options that aren't already selected by other rows
+                              Object.keys(officies)
+                                .filter((k) => !formLocations.some((f, i2) => i2 !== idx && f.name === k))
+                                .map((k) => (
+                                  <option key={k} value={k}>{k}</option>
+                                ))
+                            }
+                          </select>
+                          <input
+                            className="w-20 border px-2 py-1 text-xs"
+                            placeholder="#"
+                            value={String(loc.numAttendees ?? 0)}
+                            onChange={(e) => {
+                              const v = Number(e.target.value);
+                              const copy = [...formLocations];
+                              copy[idx] = { ...copy[idx], numAttendees: isNaN(v) ? 0 : Math.max(0, Math.floor(v)) };
+                              setFormLocations(copy);
+                            }}
+                          />
+                          <button
+                            className="px-2 py-1 text-xs border rounded"
+                            onClick={() => {
+                              const copy = [...formLocations];
+                              copy.splice(idx, 1);
+                              setFormLocations(copy.length ? copy : [{ name: "", numAttendees: 0 }]);
+                            }}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                     <div>
-                      <div className="text-xs font-medium">Event duration</div>
-                      <div className="grid grid-cols-[2fr_1fr_1fr] w-full gap-2 mt-1">
-                        <input className="border px-2 py-1 text-xs w-full" placeholder="days" value={String(formEventDuration.days ?? "")} onChange={(e) => setFormEventDuration({ ...formEventDuration, days: e.target.value === "" ? undefined : Number(e.target.value) })} />
-                        <input className="border px-2 py-1 text-xs w-full" placeholder="hours" value={String(formEventDuration.hours ?? "")} onChange={(e) => setFormEventDuration({ ...formEventDuration, hours: e.target.value === "" ? undefined : Number(e.target.value) })} />
-                        <input className="border px-2 py-1 text-xs w-full" placeholder="minutes" value={String(formEventDuration.minutes ?? "")} onChange={(e) => setFormEventDuration({ ...formEventDuration, minutes: e.target.value === "" ? undefined : Number(e.target.value) })} />
-                      </div>
+                      <button
+                        className={`px-3 py-1 rounded ${formLocations.length >= MAX_LOCATIONS ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-gray-200 text-xs'}`}
+                        onClick={() => {
+                          if (formLocations.length >= MAX_LOCATIONS) return;
+                          setFormLocations([...formLocations, { name: "", numAttendees: 0 }]);
+                        }}
+                        disabled={formLocations.length >= MAX_LOCATIONS}
+                      >
+                        + Add location
+                      </button>
+                      <button
+                        className="ml-2 px-3 py-1 rounded bg-gray-200 text-xs"
+                        onClick={() => {
+                          // populate with all offices from officies.json
+                          const all = Object.keys(officies).map((k) => ({ name: k, numAttendees: 0 }));
+                          // cap to MAX_LOCATIONS
+                          const capped = all.slice(0, MAX_LOCATIONS);
+                          setFormLocations(capped.length ? capped : [{ name: "", numAttendees: 0 }]);
+                        }}
+                      >
+                        Use all offices
+                      </button>
                     </div>
 
-                    <div>
-                      <div className="text-xs font-medium">Availability window</div>
-                      <div className="flex flex-col mt-1 text-xs">
-                        <input
-                          type="datetime-local"
-                          className="border px-2 py-1 mb-1"
-                          placeholder="start"
-                          value={availabilityToInput(formAvailability.start)}
-                          onChange={(e) => setFormAvailability({ ...formAvailability, start: e.target.value })}
-                        />
-                        <input
-                          type="datetime-local"
-                          className="border px-2 py-1"
-                          placeholder="end"
-                          value={availabilityToInput(formAvailability.end)}
-                          onChange={(e) => setFormAvailability({ ...formAvailability, end: e.target.value })}
-                        />
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <div>
+                        <div className="text-xs font-medium">Event duration</div>
+                        <div className="grid grid-cols-[2fr_1fr_1fr] w-full gap-2 mt-1">
+                          <input className="border px-2 py-1 text-xs w-full" placeholder="days" value={String(formEventDuration.days ?? "")} onChange={(e) => setFormEventDuration({ ...formEventDuration, days: e.target.value === "" ? undefined : Number(e.target.value) })} />
+                          <input className="border px-2 py-1 text-xs w-full" placeholder="hours" value={String(formEventDuration.hours ?? "")} onChange={(e) => setFormEventDuration({ ...formEventDuration, hours: e.target.value === "" ? undefined : Number(e.target.value) })} />
+                          <input className="border px-2 py-1 text-xs w-full" placeholder="minutes" value={String(formEventDuration.minutes ?? "")} onChange={(e) => setFormEventDuration({ ...formEventDuration, minutes: e.target.value === "" ? undefined : Number(e.target.value) })} />
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-xs font-medium">Availability window</div>
+                        <div className="flex flex-col mt-1 text-xs">
+                          <input
+                            type="datetime-local"
+                            className="border px-2 py-1 mb-1"
+                            placeholder="start"
+                            value={availabilityToInput(formAvailability.start)}
+                            onChange={(e) => setFormAvailability({ ...formAvailability, start: e.target.value })}
+                          />
+                          <input
+                            type="datetime-local"
+                            className="border px-2 py-1"
+                            placeholder="end"
+                            value={availabilityToInput(formAvailability.end)}
+                            onChange={(e) => setFormAvailability({ ...formAvailability, end: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                      <div className="col-span-2 mt-2">
+                        <label className="inline-flex items-center text-xs">
+                          <input
+                            type="checkbox"
+                            className="mr-2"
+                            checked={formIncludeNonQrt}
+                            onChange={(e) => setFormIncludeNonQrt(e.target.checked)}
+                          />
+                          Include Non-QRT locations
+                        </label>
+                        <div className="text-xs text-gray-500">When checked, submitted JSON will set <code>airports: true</code></div>
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
               {error && <div className="text-sm text-red-600 mt-2">{error}</div>}
             </div>
 
@@ -359,6 +404,8 @@ export default function Home() {
                         }),
                         event_duration: formEventDuration,
                         availability_window: avail,
+                        // include non-QRT locations toggle -> maps to `airports` in the API
+                        airports: formIncludeNonQrt === true,
                       };
                     }
 
@@ -556,7 +603,7 @@ export default function Home() {
 
       {/* Summary modal that replaces the setup button after successful confirm */}
       {showSummaryModal && (
-        <div className="absolute top-8 w-fit left-8 backdrop-blur-2xl rounded-xl shadow-sm  p-4">
+        <div className="absolute top-8 w-fit left-8 backdrop-blur-2xl rounded-xl shadow-sm  p-2 ">
           <div className="mx-auto text-center font-bold text-3xl text-shadow-xs mb-8">Meeting Setup</div>
           <div className="bg-white p-3 rounded-xl">
             {lastSetupJson == null ? (
@@ -604,7 +651,9 @@ export default function Home() {
                 </ul>
               </div>
             ) : (
-              <div className="text-xs text-gray-600">{JSON.stringify(lastSetupJson).slice(0, 600)}</div>
+              <div className="text-xs text-gray-600">
+                <pre className="whitespace-pre-wrap break-words max-h-44 overflow-auto">{JSON.stringify(lastSetupJson, null, 2).slice(0, 600)}</pre>
+              </div>
             )}
 
             {/* Event metadata (if provided) */}
@@ -652,71 +701,72 @@ export default function Home() {
           className="absolute top-8 right-8 max-h-[95vh] w-1/5 gap-2 p-2 pt-4 backdrop-blur-2xl rounded-xl shadow-lg flex flex-col items-center "
         >
           <p className="font-bold text-3xl text-shadow-xs mb-8">Suggested Locations</p>
-          {/* Highlighted groups: Most Environmental (min CO2), Least Travel Time (min travel), Others */}
-          {mostEnvironmental ? (
-            <div className="w-full mb-3">
-              <div className="flex items-center gap-4 mx-3 mb-2">
+          <div className="h-full overflow-y-scroll">
+            {/* Highlighted groups: Most Environmental (min CO2), Least Travel Time (min travel), Others */}
+            {mostEnvironmental ? (
+              <div className="w-full mb-3">
+                <div className="flex items-center gap-4 mx-3 mb-2">
 
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" className="bi bi-leaf " viewBox="0 0 16 16">
-                  <path d="M1.4 1.7c.216.289.65.84 1.725 1.274 1.093.44 2.884.774 5.834.528l.37-.023c1.823-.06 3.117.598 3.956 1.579C14.16 6.082 14.5 7.41 14.5 8.5c0 .58-.032 1.285-.229 1.997q.198.248.382.54c.756 1.2 1.19 2.563 1.348 3.966a1 1 0 0 1-1.98.198c-.13-.97-.397-1.913-.868-2.77C12.173 13.386 10.565 14 8 14c-1.854 0-3.32-.544-4.45-1.435-1.125-.887-1.89-2.095-2.391-3.383C.16 6.62.16 3.646.509 1.902L.73.806zm-.05 1.39c-.146 1.609-.008 3.809.74 5.728.457 1.17 1.13 2.213 2.079 2.961.942.744 2.185 1.22 3.83 1.221 2.588 0 3.91-.66 4.609-1.445-1.789-2.46-4.121-1.213-6.342-2.68-.74-.488-1.735-1.323-1.844-2.308-.023-.214.237-.274.38-.112 1.4 1.6 3.573 1.757 5.59 2.045 1.227.215 2.21.526 3.033 1.158.058-.39.075-.782.075-1.158 0-.91-.288-1.988-.975-2.792-.626-.732-1.622-1.281-3.167-1.229l-.316.02c-3.05.253-5.01-.08-6.291-.598a5.3 5.3 0 0 1-1.4-.811" />
-                </svg>
-                <div className="text-xl text-shadow-2xs font-semibold ">Most Environmental</div>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" className="bi bi-leaf " viewBox="0 0 16 16">
+                    <path d="M1.4 1.7c.216.289.65.84 1.725 1.274 1.093.44 2.884.774 5.834.528l.37-.023c1.823-.06 3.117.598 3.956 1.579C14.16 6.082 14.5 7.41 14.5 8.5c0 .58-.032 1.285-.229 1.997q.198.248.382.54c.756 1.2 1.19 2.563 1.348 3.966a1 1 0 0 1-1.98.198c-.13-.97-.397-1.913-.868-2.77C12.173 13.386 10.565 14 8 14c-1.854 0-3.32-.544-4.45-1.435-1.125-.887-1.89-2.095-2.391-3.383C.16 6.62.16 3.646.509 1.902L.73.806zm-.05 1.39c-.146 1.609-.008 3.809.74 5.728.457 1.17 1.13 2.213 2.079 2.961.942.744 2.185 1.22 3.83 1.221 2.588 0 3.91-.66 4.609-1.445-1.789-2.46-4.121-1.213-6.342-2.68-.74-.488-1.735-1.323-1.844-2.308-.023-.214.237-.274.38-.112 1.4 1.6 3.573 1.757 5.59 2.045 1.227.215 2.21.526 3.033 1.158.058-.39.075-.782.075-1.158 0-.91-.288-1.988-.975-2.792-.626-.732-1.622-1.281-3.167-1.229l-.316.02c-3.05.253-5.01-.08-6.291-.598a5.3 5.3 0 0 1-1.4-.811" />
+                  </svg>
+                  <div className="text-xl text-shadow-2xs font-semibold ">Most Environmental</div>
+                </div>
+                <LocationListItem key={mostEnvironmental.id} loc={mostEnvironmental} />
               </div>
-              <LocationListItem key={mostEnvironmental.id} loc={mostEnvironmental} />
-            </div>
-          ) : null}
+            ) : null}
 
-          {leastTravel ? (
-            <div className="w-full mb-3">
-              <div className="flex items-center gap-4 mx-3 mb-2">
+            {leastTravel ? (
+              <div className="w-full mb-3">
+                <div className="flex items-center gap-4 mx-3 mb-2">
 
-   
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0" />
-                  <path d="M12 7v5l3 3" />
-                </svg>
 
-                <div className="text-xl text-shadow-2xs font-semibold">Least Travel Time</div>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0" />
+                    <path d="M12 7v5l3 3" />
+                  </svg>
+
+                  <div className="text-xl text-shadow-2xs font-semibold">Least Travel Time</div>
+                </div>
+                <LocationListItem key={leastTravel.id} loc={leastTravel} />
               </div>
-              <LocationListItem key={leastTravel.id} loc={leastTravel} />
-            </div>
-          ) : null}
+            ) : null}
 
-          {shortestSpan ? (
-            <div className="w-full mb-3">
-              <div className="flex items-center gap-4 mx-3 mb-2">
-<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="bi bi-calendar-range-fill" viewBox="0 0 16 16">
-  <path d="M4 .5a.5.5 0 0 0-1 0V1H2a2 2 0 0 0-2 2v1h16V3a2 2 0 0 0-2-2h-1V.5a.5.5 0 0 0-1 0V1H4zM16 7V5H0v5h5a1 1 0 1 1 0 2H0v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9h-6a1 1 0 1 1 0-2z"/>
-</svg>
-                <div className="text-xl text-shadow-2xs font-semibold">Shortest Span</div>
+            {shortestSpan ? (
+              <div className="w-full mb-3">
+                <div className="flex items-center gap-4 mx-3 mb-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="bi bi-calendar-range-fill" viewBox="0 0 16 16">
+                    <path d="M4 .5a.5.5 0 0 0-1 0V1H2a2 2 0 0 0-2 2v1h16V3a2 2 0 0 0-2-2h-1V.5a.5.5 0 0 0-1 0V1H4zM16 7V5H0v5h5a1 1 0 1 1 0 2H0v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9h-6a1 1 0 1 1 0-2z" />
+                  </svg>
+                  <div className="text-xl text-shadow-2xs font-semibold">Shortest Span</div>
+                </div>
+                <LocationListItem key={shortestSpan.id} loc={shortestSpan} />
               </div>
-              <LocationListItem key={shortestSpan.id} loc={shortestSpan} />
-            </div>
-          ) : null}
+            ) : null}
 
-          {others && others.length > 0 ? (
-            <div className="w-full">
-              <div className="text-xl ml-1 text-shadow-2xs font-semibold mb-2">Other Routes</div>
-              <div className="space-y-2">
-                {others.map((loc) => (
-                  <LocationListItem key={loc.id} loc={loc} />
-                ))}
+            {others && others.length > 0 ? (
+              <div className="w-full">
+                <div className="text-xl ml-1 text-shadow-2xs font-semibold mb-2">Other Routes</div>
+                <div className="space-y-2">
+                  {others.map((loc) => (
+                    <LocationListItem key={loc.id} loc={loc} />
+                  ))}
+                </div>
               </div>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </div>
       }
-
       {/* Details modal: slides in from right when a location is selected */}
       {/**
        * We keep the details panel mounted while animating out so we can play
@@ -864,12 +914,12 @@ function LocationListItem({ loc }: { loc: any }) {
       onClick={() => setSelectedId(loc.id)}
       className={`text-left shadow-xs w-full cursor-pointer rounded-xl p-4 py-2 border ${isSelected ? "bg-sky-100 border-sky-300" : "bg-white border-gray-100"}`}
     >
-      <div className="text-lg font-bold text-black">{loc.event_location}{" - QRT Office"}</div>
+      <div className="text-lg font-bold text-black">{loc.event_location}{loc.event_location.length > 4 ? " - QRT Office" : " - Airport"}</div>
       <div className="text-xs text-gray-600">{(office.line1) + (office.postcode ? ", " + office.postcode : "")}</div>
       <div className="text-base text-gray-800  mt-1">{eventLine}</div>
       <div className="flex justify-between text-xs text-gray-500 mt-4">
 
-        <div className="">{loc.total_co2 != null ? loc.total_co2.toFixed(2) + " kg" : "N/A"} {"CO₂"}</div>
+        <div className="">{loc.total_co2 != null ? loc.total_co2.toFixed(2) + " ton" : "N/A"} {"CO₂"}</div>
         <div className="">
           {" | "}
         </div>
@@ -901,5 +951,14 @@ function LocationListItem({ loc }: { loc: any }) {
         }</div>
       </div>
     </button>
+  );
+}
+
+function LoadingSpinner() {
+  return (
+    <div className="flex items-center justify-center py-6">
+      <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-sky-600" />
+      <div className="ml-3 text-sm text-gray-600">Loading…</div>
+    </div>
   );
 }

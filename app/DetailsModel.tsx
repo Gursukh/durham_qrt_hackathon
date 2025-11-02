@@ -37,7 +37,7 @@ export default function DetailsModal({ onClose, closing }: { onClose: () => void
       }
 
       try {
-        const srcs = await getImageSrcs(`${office.town} `, { key, cx, num: 5 });
+        const srcs = await getImageSrcs(`${loc.event_location.length > 3 ? office.town : loc.event_location + " Airport"} `, { key, cx, num: 5 });
         if (!cancelled) setImages(srcs);
         // Filter out instagram urls
         setImages((prev) => prev.filter((src) => !src.includes("instagram.com")));
@@ -96,7 +96,7 @@ export default function DetailsModal({ onClose, closing }: { onClose: () => void
         <div className="pt-1">
           <div className="text-base font-semibold text-black border-b border-gray-300 mb-2">{"Address"}</div>
           <div className="text-sm text-gray-700">{office.line1}</div>
-          <div className="text-sm text-gray-700">{`${office.postcode}${office.postcode&&","} ${office.town}`}</div>
+          <div className="text-sm text-gray-700">{`${office.postcode ?? ""}${((office.postcode?? "") && ",")} ${office.town ?? ""}`}</div>
         </div>
       </div>
 
@@ -131,7 +131,7 @@ export default function DetailsModal({ onClose, closing }: { onClose: () => void
                 <div className="font-bold text-gray-800">{`${startLoc.name}`}</div>
                   <div className="text-sm text-gray-600">
                     {loc.attendee_co2[startLoc.name] != null
-                      ? `${loc.attendee_co2[startLoc.name].per_attendee} tonnes CO₂`
+                      ? `${loc.attendee_co2[startLoc.name].per_attendee * 1000} kg CO₂`
                       : "N/A"}
                   </div>
                 </div>
@@ -142,7 +142,7 @@ export default function DetailsModal({ onClose, closing }: { onClose: () => void
           <div className="flex justify-between">
 
           <div className="text-2xl w-fit font-bold text-black">Total</div>
-          <div className="text-2xl w-fit  text-gray-700">{loc.total_co2 != null ? loc.total_co2.toFixed(2) + " tonnes of CO₂" : "N/A"}</div>
+          <div className="text-2xl w-fit  text-gray-700">{loc.total_co2 != null ? loc.total_co2.toFixed(2) * 1000 + " kg CO₂" : "N/A"}</div>
           </div>
         </div>
       </div>

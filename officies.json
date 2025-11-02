@@ -115,5 +115,285 @@
     "country": "Hungary",
     "long": 19.0633943,
     "lat": 47.523423
+  },
+  "ATL": {
+    "line1": "Hartsfield–Jackson Atlanta International Airport",
+    "long": -84.428101,
+    "lat": 33.6367
+  },
+  "PEK": {
+    "line1": "Beijing Capital International Airport",
+    "long": 116.58499908447266,
+    "lat": 40.080101013183594
+  },
+  "DXB": {
+    "line1": "Dubai International Airport",
+    "long": 55.3643989563,
+    "lat": 25.2527999878
+  },
+  "LAX": {
+    "line1": "Los Angeles International Airport",
+    "long": -118.407997,
+    "lat": 33.942501
+  },
+  "HND": {
+    "line1": "Tokyo International Airport",
+    "long": 139.779999,
+    "lat": 35.552299
+  },
+  "ORD": {
+    "line1": "O'Hare International Airport",
+    "long": -87.9048,
+    "lat": 41.9786
+  },
+  "LHR": {
+    "line1": "London Heathrow Airport",
+    "long": -0.461941,
+    "lat": 51.4706
+  },
+  "HKG": {
+    "line1": "Hong Kong International Airport",
+    "long": 113.915001,
+    "lat": 22.308901
+  },
+  "PVG": {
+    "line1": "Shanghai Pudong International Airport",
+    "long": 121.805,
+    "lat": 31.1434
+  },
+  "CDG": {
+    "line1": "Paris-Charles de Gaulle Airport",
+    "long": 2.55,
+    "lat": 49.012798
+  },
+  "DFW": {
+    "line1": "Dallas-Fort Worth International Airport",
+    "long": -97.038002,
+    "lat": 32.896801
+  },
+  "AMS": {
+    "line1": "Amsterdam Airport Schiphol",
+    "long": 4.76389,
+    "lat": 52.308601
+  },
+  "FRA": {
+    "line1": "Frankfurt Airport",
+    "long": 8.561096,
+    "lat": 50.030241
+  },
+  "IST": {
+    "line1": "Atatürk International Airport",
+    "long": 28.741951,
+    "lat": 41.261297
+  },
+  "CAN": {
+    "line1": "Guangzhou Baiyun International Airport",
+    "long": 113.299004,
+    "lat": 23.392401
+  },
+  "JFK": {
+    "line1": "John F. Kennedy International Airport",
+    "long": -73.779317,
+    "lat": 40.639447
+  },
+  "SIN": {
+    "line1": "Singapore Changi Airport",
+    "long": 103.994003,
+    "lat": 1.35019
+  },
+  "DEN": {
+    "line1": "Denver International Airport",
+    "long": -104.672996521,
+    "lat": 39.861698150635
+  },
+  "ICN": {
+    "line1": "Seoul Incheon International Airport",
+    "long": 126.450996,
+    "lat": 37.469101
+  },
+  "BKK": {
+    "line1": "Suvarnabhumi Airport",
+    "long": 100.747002,
+    "lat": 13.6811
+  },
+  "DEL": {
+    "line1": "Indira Gandhi International Airport",
+    "long": 77.09519,
+    "lat": 28.55563
+  },
+  "CGK": {
+    "line1": "Soekarno-Hatta International Airport",
+    "long": 106.655998,
+    "lat": -6.12557
+  },
+  "SFO": {
+    "line1": "San Francisco International Airport",
+    "long": -122.374821,
+    "lat": 37.619806
+  },
+  "KUL": {
+    "line1": "Kuala Lumpur International Airport",
+    "long": 101.709999,
+    "lat": 2.74558
+  },
+  "MAD": {
+    "line1": "Madrid-Barajas Airport",
+    "long": -3.56264,
+    "lat": 40.471926
+  },
+  "LAS": {
+    "line1": "McCarran International Airport",
+    "long": -115.151817,
+    "lat": 36.083361
+  },
+  "CTU": {
+    "line1": "Chengdu Shuangliu International Airport",
+    "long": 103.945966,
+    "lat": 30.558257
+  },
+  "SEA": {
+    "line1": "Seattle-Tacoma International Airport",
+    "long": -122.310276,
+    "lat": 47.447943
+  },
+  "BOM": {
+    "line1": "Chhatrapati Shivaji International Airport",
+    "long": 72.8678970337,
+    "lat": 19.0886993408
+  },
+  "MIA": {
+    "line1": "Miami International Airport",
+    "long": -80.29060363769531,
+    "lat": 25.79319953918457
+  },
+  "CLT": {
+    "line1": "Charlotte Douglas International Airport",
+    "long": -80.94309997558594,
+    "lat": 35.2140007019043
+  },
+  "YYZ": {
+    "line1": "Toronto Pearson International Airport",
+    "long": -79.6306,
+    "lat": 43.6772
+  },
+  "BCN": {
+    "line1": "Barcelona Airport",
+    "long": 2.07846,
+    "lat": 41.2971
+  },
+  "PHX": {
+    "line1": "Phoenix Sky Harbor International Airport",
+    "long": -112.005905,
+    "lat": 33.435302
+  },
+  "LGW": {
+    "line1": "London Gatwick Airport",
+    "long": -0.192089,
+    "lat": 51.148771
+  },
+  "TPE": {
+    "line1": "Taiwan Taoyuan International Airport",
+    "long": 121.233002,
+    "lat": 25.0777
+  },
+  "MUC": {
+    "line1": "Munich Airport",
+    "long": 11.7861,
+    "lat": 48.353802
+  },
+  "SYD": {
+    "line1": "Sydney Airport",
+    "long": 151.177002,
+    "lat": -33.946098
+  },
+  "KMG": {
+    "line1": "Kunming Changshui International Airport",
+    "long": 102.936743,
+    "lat": 25.110313
+  },
+  "SZX": {
+    "line1": "Shenzhen Bao'an International Airport",
+    "long": 113.810997,
+    "lat": 22.639299
+  },
+  "MCO": {
+    "line1": "Orlando International Airport",
+    "long": -81.30899810791016,
+    "lat": 28.429399490356445
+  },
+  "FCO": {
+    "line1": "Leonardo da Vinci Airport",
+    "long": 12.251998,
+    "lat": 41.804532
+  },
+  "IAH": {
+    "line1": "George Bush Intercontinental Airport",
+    "long": -95.34140014648438,
+    "lat": 29.984399795532227
+  },
+  "MEX": {
+    "line1": "Benito Juárez International Airport",
+    "long": -99.071328,
+    "lat": 19.435137
+  },
+  "SHA": {
+    "line1": "Shanghai Hongqiao International Airport",
+    "long": 121.33426,
+    "lat": 31.198104
+  },
+  "EWR": {
+    "line1": "Newark Liberty International Airport",
+    "long": -74.168701,
+    "lat": 40.692501
+  },
+  "MNL": {
+    "line1": "Ninoy Aquino International Airport",
+    "long": 121.019997,
+    "lat": 14.5086
+  },
+  "NRT": {
+    "line1": "Narita International Airport",
+    "long": 140.386002,
+    "lat": 35.764702
+  },
+  "MSP": {
+    "line1": "Minneapolis-Saint Paul International Airport",
+    "long": -93.221741,
+    "lat": 44.880081
+  },
+  "DOH": {
+    "line1": "Hamad International Airport",
+    "long": 51.608056,
+    "lat": 25.273056
+  },
+  "GRU": {
+    "line1": "São Paulo-Guarulhos International Airport",
+    "long": -46.467778,
+    "lat": -23.431944
+  },
+  "DME": {
+    "line1": "Domodedovo International Airport",
+    "long": 37.9063,
+    "lat": 55.408798
+  },
+  "DTW": {
+    "line1": "Detroit Metropolitan Wayne County Airport",
+    "long": -83.353786,
+    "lat": 42.21377
+  },
+  "PHL": {
+    "line1": "Philadelphia International Airport",
+    "long": -75.241096,
+    "lat": 39.871899
+  },
+  "MEL": {
+    "line1": "Melbourne Airport",
+    "long": 144.836432,
+    "lat": -37.661548
+  },
+  "BOS": {
+    "line1": "Logan International Airport",
+    "long": -71.0079,
+    "lat": 42.36197
   }
 }

@@ -98,9 +98,11 @@ function PolylineTooltip({ start, selected }: { start: any; selected: any }) {
                 )}
                 <div className="font-semibold text-sm ">{displaySelected}</div>
             </div>
-            <div className="flex text-black gap-2 mt-2">
+            <div className="grid grid-cols-2 text-black gap-2 mt-2">
                 <div className="font-bold">{"Travel Hours"}</div>
                 <div className="font-bold">{travelTimeStringHoursMins}</div>
+                <div className="font-bold">{"Emissions"}</div>
+                <div className="font-bold">{selected.attendee_co2[start.name].per_attendee * 1000} kg CO₂</div>
             </div>
         </>
     );
@@ -524,12 +526,6 @@ export function FullscreenMap({
                                 const near = (a: google.maps.LatLngLiteral, b: google.maps.LatLngLiteral) => {
                                     return Math.abs(a.lat - b.lat) < 1e-4 && Math.abs(a.lng - b.lng) < 1e-4;
                                 };
-                                // if (!near(startPos, firstHop)) {
-                                //     hopPoints.unshift(startPos);
-                                // }
-                                // if (!near(lastHop, selectedPos)) {
-                                //     hopPoints.push(selectedPos);
-                                // }
 
                                 // Build segments between consecutive hop points and concatenate.
                                 // For the very first segment (start -> firstHop) prefer the Google
@@ -612,7 +608,7 @@ export function FullscreenMap({
                                                         const content = `<div style='display:flex;flex-direction:column;align-items:center;gap:8px;color:#000'>
                                                         <div class="flex gap-2">
 
-                                                        ${carSvg}<div style='font-weight:700'>${kmStr}</div></div><div style='font-weight:700;color:#000'>${co2EmissionsKg != null ? `${co2EmissionsKg.toFixed(1)} kg CO2` : "N/A"}</div></div>`;
+                                                        ${carSvg}<div style='font-weight:700'>${kmStr}</div></div><div style='font-weight:700;color:#000'>${co2EmissionsKg != null ? `${co2EmissionsKg.toFixed(1)} g CO2` : "N/A"}</div></div>`;
                                                         routeInfoWindow.setContent(content);
                                                         routeInfoWindow.setPosition(evt.latLng);
                                                         routeInfoWindow.open({ map: mapRef.current });

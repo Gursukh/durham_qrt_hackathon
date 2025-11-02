@@ -118,6 +118,24 @@ async function proxy(request: Request) {
           }
         }
 
+        // Filter out enteries where the minimum_travel_hours is more than 16 hours
+        if (Array.isArray(out)) {
+          out = out.filter((item) => {
+            const minHours = toNumber(item?.min_travel_hours ?? item?.minTravelHours ?? NaN);
+            return !Number.isFinite(minHours) || minHours <= 16;
+          });
+        } else if (out && typeof out === "object") {
+          for (const k of Object.keys(out)) {
+            const v = out[k];
+            if (Array.isArray(v)) {
+              out[k] = v.filter((item) => {
+                const minHours = toNumber(item?.min_travel_hours ?? item?.minTravelHours ?? NaN);
+                return !Number.isFinite(minHours) || minHours <= 16;
+              });
+            }
+          }
+        }
+
         return NextResponse.json(out, { status: res.status, headers: responseHeaders });
     }
 
