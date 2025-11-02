@@ -267,6 +267,9 @@ export function FullscreenMap({
         // require a map to draw lines
         if (!mapRef.current) return;
 
+        // API key for Routes REST calls (used below when available)
+        const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
         // update marker opacities and optionally pan the map when selection changes
         locationMarkersRef.current.forEach((marker: google.maps.Marker) => {
             const id = (marker as any).__locId as string | undefined;
@@ -367,6 +370,75 @@ export function FullscreenMap({
                     return points;
                 };
 
+                // decode an encoded polyline (Google Encoded Polyline Algorithm Format)
+                const decodePolyline = (encoded: string) => {
+                    const points: google.maps.LatLngLiteral[] = [];
+                    let index = 0, len = encoded.length;
+                    let lat = 0, lng = 0;
+
+                    while (index < len) {
+                        let b, shift = 0, result = 0;
+                        do {
+                            b = encoded.charCodeAt(index++) - 63;
+                            result |= (b & 0x1f) << shift;
+                            shift += 5;
+                        } while (b >= 0x20);
+                        const dlat = ((result & 1) ? ~(result >> 1) : (result >> 1));
+                        lat += dlat;
+
+                        shift = 0;
+                        result = 0;
+                        do {
+                            b = encoded.charCodeAt(index++) - 63;
+                            result |= (b & 0x1f) << shift;
+                            shift += 5;
+                        } while (b >= 0x20);
+                        const dlng = ((result & 1) ? ~(result >> 1) : (result >> 1));
+                        lng += dlng;
+
+                        points.push({ lat: lat / 1e5, lng: lng / 1e5 });
+                    }
+                    return points;
+                };
+
+                // call Google Routes ComputeRoutes REST endpoint to get an encoded polyline for a segment.
+                // Falls back to the arc generator on any failure.
+                const computeRoutePolyline = async (o: google.maps.LatLngLiteral, d: google.maps.LatLngLiteral) => {
+                    try {
+                        if (!apiKey) return null;
+                        const url = `https://routes.googleapis.com/directions/v2:computeRoutes?key=${apiKey}`;
+                        const body = {
+                            origin: { location: { latLng: { latitude: o.lat, longitude: o.lng } } },
+                            destination: { location: { latLng: { latitude: d.lat, longitude: d.lng } } },
+                            travelMode: "DRIVE",
+                            routingPreference: "TRAFFIC_AWARE",
+                            computeAlternativeRoutes: false,
+                        };
+
+                        const resp = await fetch(url, {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                "Accept": "application/json",
+                                // Request specific response fields per API requirement
+                                "X-Goog-FieldMask": "routes.distanceMeters,routes.duration,routes.polyline.encodedPolyline",
+                            },
+                            body: JSON.stringify(body),
+                        });
+                        if (!resp.ok) return null;
+                        const data = await resp.json();
+                        // routes[0].polyline.encodedPolyline is typical
+                        const enc = data?.routes?.[0]?.polyline?.encodedPolyline || data?.routes?.[0]?.overviewPolyline?.encodedPolyline;
+                        const distanceMeters = data?.routes?.[0]?.distanceMeters ?? data?.routes?.[0]?.legs?.[0]?.distanceMeters;
+                        const durationSeconds = data?.routes?.[0]?.duration ?? data?.routes?.[0]?.legs?.[0]?.duration;
+                        if (typeof enc === "string" && enc.length > 0) {
+                            return { points: decodePolyline(enc), distanceMeters, durationSeconds };
+                        }
+                        return null;
+                    } catch (e) {
+                        return null;
+                    }
+                };
                 // compute great-circle/haversine length of a polyline (meters)
                 const haversineMeters = (p1: google.maps.LatLngLiteral, p2: google.maps.LatLngLiteral) => {
                     const R = 6371000; // earth radius in meters
@@ -433,28 +505,127 @@ export function FullscreenMap({
                                 const near = (a: google.maps.LatLngLiteral, b: google.maps.LatLngLiteral) => {
                                     return Math.abs(a.lat - b.lat) < 1e-4 && Math.abs(a.lng - b.lng) < 1e-4;
                                 };
-                                if (!near(startPos, firstHop)) {
-                                    hopPoints.unshift(startPos);
-                                }
-                                if (!near(lastHop, selectedPos)) {
-                                    hopPoints.push(selectedPos);
+                                // if (!near(startPos, firstHop)) {
+                                //     hopPoints.unshift(startPos);
+                                // }
+                                // if (!near(lastHop, selectedPos)) {
+                                //     hopPoints.push(selectedPos);
+                                // }
+
+                                // Build segments between consecutive hop points and concatenate.
+                                // For the very first segment (start -> firstHop) prefer the Google
+                                // Routes ComputeRoutes API to obtain a realistic driving route polyline.
+                                const segments: google.maps.LatLngLiteral[] = [];
+
+                                // async helper to build the full series of segments with an optional
+                                // computed first segment from the Routes API. We'll synchronously
+                                // push a fallback arc first and then replace it if ComputeRoutes succeeds.
+                                let firstSegmentReplaced = false;
+
+                                // If there is at least one hop, attempt to compute a route for the first leg
+                                if (hopPoints.length >= 2) {
+                                    const firstHopPoint = hopPoints[0];
+                                    // start -> firstHop via ComputeRoutes (REST). Use an IIFE so we
+                                    // can await without blocking the main forEach.
+                                    (async () => {
+                                        const computed = await computeRoutePolyline(startPos, firstHopPoint);
+                                        if (computed && computed.points && computed.points.length > 0) {
+                                            try {
+                                                // find where we inserted fallback points and replace them
+                                                // with the computed route. We'll rebuild segments array
+                                                // defensively by recomputing remaining arcs and inserting computed first leg.
+                                                const rebuilt: google.maps.LatLngLiteral[] = [];
+                                                // push computed first leg
+                                                rebuilt.push(...computed.points);
+                                                // for remaining hop->hop legs, use arc generator
+                                                for (let j = 0; j < hopPoints.length - 1; j++) {
+                                                    const a = hopPoints[j];
+                                                    const b = hopPoints[j + 1];
+                                                    const seg = computeArcPoints(a, b, 80, 0.25);
+                                                    if (j === 0) {
+                                                        // skip potential duplicate at join: if computed ends at same
+                                                        // coordinate as seg[0], drop seg[0]
+                                                        if (seg.length > 0) {
+                                                            // compare last of computed vs first of seg
+                                                            const lastComp = computed.points[computed.points.length - 1];
+                                                            const firstSeg = seg[0];
+                                                            const near = (p1: any, p2: any) => Math.abs(p1.lat - p2.lat) < 1e-4 && Math.abs(p1.lng - p2.lng) < 1e-4;
+                                                            if (near(lastComp, firstSeg)) {
+                                                                rebuilt.push(...seg.slice(1));
+                                                            } else {
+                                                                rebuilt.push(...seg);
+                                                            }
+                                                        }
+                                                    } else {
+                                                        // avoid duplicate vertex at joins
+                                                        rebuilt.push(...seg.slice(1));
+                                                    }
+                                                }
+                                                // Replace segments content
+                                                segments.length = 0;
+                                                segments.push(...rebuilt);
+                                                firstSegmentReplaced = true;
+
+                                                // Create a separate route polyline (driving route) and attach a car+distance tooltip
+                                                try {
+                                                    const routePolyline = new google.maps.Polyline({
+                                                        path: computed.points,
+                                                        geodesic: false,
+                                                        strokeColor: "#a43ef7",
+                                                        strokeOpacity: 0.95,
+                                                        strokeWeight: 4.0,
+                                                        zIndex: 900,
+                                                        map: mapRef.current!,
+                                                    });
+
+                                                    // small InfoWindow for car + distance
+                                                    const routeInfoWindow = new google.maps.InfoWindow({ maxWidth: 300, headerDisabled: true });
+
+                                                    const showRouteTooltip = (evt: google.maps.MapMouseEvent | undefined) => {
+                                                        if (!evt || !evt.latLng) return;
+                                                        const meters = computed.distanceMeters ?? null;
+                                                        const kmStr = meters != null ? `${(meters / 1000).toFixed(1)} km` : "N/A";
+                                                        const co2EmissionsKg = meters != null ? (meters / 1000) * 0.192 : null; // avg car CO2 g/km
+                                                        const carSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-car-front" viewBox="0 0 16 16">
+  <path d="M4 9a1 1 0 1 1-2 0 1 1 0 0 1 2 0m10 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0M6 8a1 1 0 0 0 0 2h4a1 1 0 1 0 0-2zM4.862 4.276 3.906 6.19a.51.51 0 0 0 .497.731c.91-.073 2.35-.17 3.597-.17s2.688.097 3.597.17a.51.51 0 0 0 .497-.731l-.956-1.913A.5.5 0 0 0 10.691 4H5.309a.5.5 0 0 0-.447.276"/>
+  <path d="M2.52 3.515A2.5 2.5 0 0 1 4.82 2h6.362c1 0 1.904.596 2.298 1.515l.792 1.848c.075.175.21.319.38.404.5.25.855.715.965 1.262l.335 1.679q.05.242.049.49v.413c0 .814-.39 1.543-1 1.997V13.5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1-.5-.5v-1.338c-1.292.048-2.745.088-4 .088s-2.708-.04-4-.088V13.5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1-.5-.5v-1.892c-.61-.454-1-1.183-1-1.997v-.413a2.5 2.5 0 0 1 .049-.49l.335-1.68c.11-.546.465-1.012.964-1.261a.8.8 0 0 0 .381-.404l.792-1.848ZM4.82 3a1.5 1.5 0 0 0-1.379.91l-.792 1.847a1.8 1.8 0 0 1-.853.904.8.8 0 0 0-.43.564L1.03 8.904a1.5 1.5 0 0 0-.03.294v.413c0 .796.62 1.448 1.408 1.484 1.555.07 3.786.155 5.592.155s4.037-.084 5.592-.155A1.48 1.48 0 0 0 15 9.611v-.413q0-.148-.03-.294l-.335-1.68a.8.8 0 0 0-.43-.563 1.8 1.8 0 0 1-.853-.904l-.792-1.848A1.5 1.5 0 0 0 11.18 3z"/>
+</svg>`;
+                                                        const content = `<div style='display:flex;align-items:center;gap:8px;color:#000'>${carSvg}<div style='font-weight:700'>${kmStr}</div><br /><div style='font-weight:700;color:#a43ef7'>${co2EmissionsKg != null ? `${co2EmissionsKg.toFixed(1)} kg CO2` : "N/A"}</div></div>`;
+                                                        routeInfoWindow.setContent(content);
+                                                        routeInfoWindow.setPosition(evt.latLng);
+                                                        routeInfoWindow.open({ map: mapRef.current });
+                                                    };
+
+                                                    const hideRouteTooltip = () => routeInfoWindow.close();
+
+                                                    routePolyline.addListener("mouseover", (evt: google.maps.MapMouseEvent) => showRouteTooltip(evt));
+                                                    routePolyline.addListener("mousemove", (evt: google.maps.MapMouseEvent) => showRouteTooltip(evt));
+                                                    routePolyline.addListener("mouseout", () => hideRouteTooltip());
+
+                                                    polylinesRef.current.push(routePolyline);
+                                                } catch (e) {
+                                                    // ignore route polyline creation errors
+                                                }
+                                            } catch (e) {
+                                                // ignore and keep fallback arcs
+                                            }
+                                        }
+                                    })();
                                 }
 
-                                // Build arc segments between consecutive hop points and concatenate.
-                                // This creates a smooth curved route through each hop (start -> hop1 -> hop2 -> ... -> selected).
-                                const segments: google.maps.LatLngLiteral[] = [];
+                                // Build fallback arc-based segments synchronously so UI shows something
                                 for (let i = 0; i < hopPoints.length - 1; i++) {
                                     const a = hopPoints[i];
                                     const b = hopPoints[i + 1];
-                                    // fewer points for short segments, more for longer ones could be adaptive;
                                     const seg = computeArcPoints(a, b, 80, 0.25);
                                     if (i === 0) {
                                         segments.push(...seg);
                                     } else {
-                                        // skip first point to avoid duplicate vertex at joins
                                         segments.push(...seg.slice(1));
                                     }
                                 }
+
+                                // Use segments if we have them; otherwise fallback to direct start->selected
                                 path = segments.length > 0 ? segments : [startPos, selectedPos];
 
                                 // Create visual markers (circle + code) for intermediate hops (exclude start & selected)

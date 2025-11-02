@@ -67,14 +67,14 @@ export default function DetailsModal({ onClose, closing }: { onClose: () => void
 
   return (
     <div className="flex flex-col gap-2 p ">
-      <div className="flex items-center justify-between mb-7">
+      <div className="flex items-center justify-between mb-4">
         <button
           onClick={onClose}
-          className=" text-md text-sky-600 hover:underline bg-white rounded-full px-2 py-1 mt-2 flex items-center"
+          className="absolute text-md text-sky-600 hover:underline bg-white rounded-full px-2 py-1 mt-2 flex items-center"
         >
           {"< Back"}
         </button>
-        <div className="absolute right-6 top-5 flex-1 text-center text-4xl text-white font-bold text-shadow-xs whitespace-nowrap">{loc.event_location}</div>
+        <div className=" right-6 top-7 flex-1 text-center text-4xl text-white font-bold text-shadow-xs whitespace-nowrap">{loc.event_location}</div>
       </div>
       
       {(

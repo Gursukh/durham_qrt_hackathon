@@ -808,7 +808,7 @@ function formatAvailabilityWindow(avail: any): string | null {
   const s = start ? fmt(start) : "N/A";
   const e = end ? fmt(end) : "N/A";
 
-  return `From, ${s} to ${e}`;
+  return `From, ${s}\n to ${e}`;
 }
 
 function LocationListItem({ loc }: { loc: any }) {
