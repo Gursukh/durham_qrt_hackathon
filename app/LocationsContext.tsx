@@ -5,20 +5,21 @@ import sampleData from "../sample.json";
 import inputs from "../input.json"
 import officies from "../officies.json"
 
-// Minimal types for the feature objects in sample.json
-export type Address = {
-  line1?: string;
-  town?: string;
-  county?: string;
-  postcode?: string;
-  country?: string;
-  latitude?: number;
-  longitude?: number;
+// Types for the event-shaped sample.json
+export type EventDates = {
+  start: string;
+  end: string;
 };
 
-export type Feature = {
-  // add an id injected by the provider
-  id: string;
+export type EventSpan = {
+  start: string;
+  end: string;
+};
+
+export type EventSample = {
+  event_location: string;
+  event_dates: EventDates;
+  event_span: EventSpan;
   name: string;
   line1?: string;
   town?: string;
@@ -27,6 +28,12 @@ export type Feature = {
   country?: string;
   latitude?: number;
   longitude?: number;
+  total_co2: number;
+  average_travel_hours: number;
+  median_travel_hours: number;
+  max_travel_hours: number;
+  min_travel_hours: number;
+  attendee_travel_hours: Record<string, number>;
 };
 
 export type StartingLocation = {
@@ -36,10 +43,10 @@ export type StartingLocation = {
 };
 
 type LocationsContextValue = {
-  locations: Feature[];
-  setLocations: React.Dispatch<React.SetStateAction<Feature[]>>;
-  startingLocations: StartingLocation[];
-  setStartingLocations: React.Dispatch<React.SetStateAction<StartingLocation[]>>;
+  locations: any[];
+  setLocations: React.Dispatch<React.SetStateAction<any[]>>;
+  startingLocations: StartingLocation[] | null;
+  setStartingLocations: React.Dispatch<React.SetStateAction<StartingLocation[] | null>>;
   selectedId: string | null;
   setSelectedId: React.Dispatch<React.SetStateAction<string | null>>;
 };
@@ -47,41 +54,15 @@ type LocationsContextValue = {
 const LocationsContext = createContext<LocationsContextValue | undefined>(undefined);
 
 export function LocationsProvider({ children }: { children: React.ReactNode }) {
-  const [locations, setLocations] = useState<Feature[]>(() => {
-    // Default populate from sample.json at startup
-    try {
-      const raw = Array.isArray(sampleData) ? (sampleData as any[]) : [];
-      // Inject stable ids (string of index) so we can reference locations easily
-      return raw.map((feat, i) => ({ id: String(i), ...feat })) as Feature[];
-    } catch (e) {
-      console.error("Failed to load sample locations:", e);
-      return [];
-    }
-  });
-
-  const [startingLocations, setStartingLocations] = useState<StartingLocation[]>(() => {
-    // ensure we can index attendees by arbitrary string keys
-    const attendeesByCity = inputs.attendees as Record<string, any>;
-
-    return Object.keys(attendeesByCity).map((city) => {
-      const key = city as keyof typeof officies;
-      const office = officies[key];
-      return {
-        name: city,
-        coordinates: [office.lat, office.long] as [number, number],
-        numAttendees: Array.isArray(attendeesByCity[city]) ? attendeesByCity[city].length : Number(attendeesByCity[city]) || 0,
-      };
-    });
-  });
+  // Keep old locations state for other parts of the app that expect feature-like lists.
+  // This repo previously used an array of location features in `sample.json`. The new sample
+  // format is event-shaped (EventSample). We still keep a locations array for compatibility.
+  // Initialize `locations` from the event-shaped sample.json (an array of EventSample)
+  const [locations, setLocations] = useState<any[]>([] as EventSample[]);
+  // start with null to indicate no starting locations configured yet
+  const [startingLocations, setStartingLocations] = useState<StartingLocation[] | null>(null);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
-
-  // Keep this effect in case we want to support dynamic updates from local files in future
-  useEffect(() => {
-    let cities = Object.keys(inputs.attendees);
-
-
-  }, []);
 
   return (
     <LocationsContext.Provider value={{ locations, setLocations, startingLocations, setStartingLocations, selectedId, setSelectedId }}>

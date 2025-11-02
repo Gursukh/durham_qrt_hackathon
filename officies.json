@@ -1,15 +1,119 @@
 {
-  "London": { "long": -0.142382, "lat": 51.4974644 },
-  "Paris": { "long": 2.31144404, "lat": 48.878074645 },
-  "Hong Kong": { "long": 114.156802, "lat": 22.2811236 },
-  "Singapore": { "long": 103.8515092, "lat": 1.2797808 },
-  "Mumbai": { "long": 72.88261, "lat": 19.07283 },
-  "Dubai": { "long": 55.27787, "lat": 25.2106 },
-  "Shanghai": { "long": 121.5399259, "lat": 31.2234377 },
-  "Zurich": { "long": 8.5413, "lat": 47.372 },
-  "Geneva": { "long": 6.145, "lat": 46.2024 },
-  "Aarhus": { "long": 10.2063446, "lat": 56.1541519 },
-  "Sydney": { "long": 151.21115, "lat": -33.86924 },
-  "Wroclaw": { "long": 17.0333, "lat": 51.1 },
-  "Budapest": { "long": 19.0633943, "lat": 47.523423 }
+  "London": {
+    "line1": "9 Bressenden Place",
+    "town": "London",
+    "county": "London",
+    "postcode": "SW1E 5BY",
+    "country": "UK",
+    "long": -0.142382,
+    "lat": 51.4974644
+  },
+  "Paris": {
+    "line1": "32 rue de Monceau,",
+    "town": "Paris",
+    "county": "Paris",
+    "postcode": "75008",
+    "country": "France",
+    "long": 2.31144404,
+    "lat": 48.878074645
+  },
+  "Hong Kong": {
+    "line1": "Queen's Road Central 28, Central Tower",
+    "town": "Hong Kong Island",
+    "county": "Hong Kong",
+    "postcode": "",
+    "country": "China",
+    "long": 114.156802,
+    "lat": 22.2811236
+  },
+  "Singapore": {
+    "line1": "1 Raffles Place, #26-00",
+    "town": "Singapore",
+    "county": "Central",
+    "postcode": "048616",
+    "country": "Singapore",
+    "long": 103.8515092,
+    "lat": 1.2797808
+  },
+  "Mumbai": {
+    "line1": "One BKC, G Block, Bandra Kurla Complex",
+    "town": "Mumbai",
+    "county": "Maharashtra",
+    "postcode": "400051",
+    "country": "India",
+    "long": 72.88261,
+    "lat": 19.07283
+  },
+  "Dubai": {
+    "line1": "Dubai World Trade Centre",
+    "town": "Dubai",
+    "county": "Dubai",
+    "postcode": "",
+    "country": "UAE",
+    "long": 55.27787,
+    "lat": 25.2106
+  },
+  "Shanghai": {
+    "line1": "Shanghai Tower",
+    "town": "Shanghai",
+    "county": "Shanghai",
+    "postcode": "",
+    "country": "China",
+    "long": 121.5399259,
+    "lat": 31.2234377
+  },
+  "Zurich": {
+    "line1": "Bahnhofstrasse 1",
+    "town": "Zurich",
+    "county": "Zurich",
+    "postcode": "8001",
+    "country": "Switzerland",
+    "long": 8.5413,
+    "lat": 47.372
+  },
+  "Geneva": {
+    "line1": "Rue du Rhône 67",
+    "town": "Geneva",
+    "county": "Geneva",
+    "postcode": "1204",
+    "country": "Switzerland",
+    "long": 6.145,
+    "lat": 46.2024
+  },
+  "Aarhus": {
+    "line1": "Aarhus City Hall",
+    "town": "Aarhus",
+    "county": "Aarhus",
+    "postcode": "8000",
+    "country": "Denmark",
+    "long": 10.2063446,
+    "lat": 56.1541519
+  },
+  "Sydney": {
+    "line1": "Aurora Place, Level 24",
+    "town": "Sydney",
+    "county": "New South Wales",
+    "postcode": "2000",
+    "country": "Australia",
+    "long": 151.21115,
+    "lat": -33.86924
+  },
+  "Wroclaw": {
+    "line1": "Infinity Building, 5th Floor",
+    "town": "Wroclaw",
+    "county": "Wroclaw",
+    "postcode": "53-673",
+    "country": "Poland",
+    "long": 17.0333,
+    "lat": 51.1
+  },
+  "Budapest": {
+    "line1": "H2Offices building, 2nd floor, Vaci ut 23-27",
+    "town": "Budapest",
+    "county": "Budapest",
+    "postcode": "1134",
+    "country": "Hungary",
+    "long": 19.0633943,
+    "lat": 47.523423
+  }
 }

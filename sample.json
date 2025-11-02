@@ -1,12 +1,23 @@
-[
-    {
-        "line1": "9 Bressenden Place",
-        "town": "London",
-        "county": "London",
-        "postcode": "SW1E 5BY",
-        "country": "UK",
-        "latitude": 51.4974644,
-        "longitude": -0.142382,
-        "name": "QRT London Office"
-    }
-]
+[{
+	"event_location": "London",
+	"event_dates": {
+		"start": "2025-12-10T09:30:00Z",
+		"end": "2025-12-11T13:20:00Z"
+	},
+	"event_span": {
+		"start": "2025-12-09T17:30:00Z",
+		"end": "2025-12-11T22:27:00Z"
+	},
+	"total_co2": 125,
+	"average_travel_hours": 10.9,
+	"median_travel_hours": 5.7,
+	"max_travel_hours": 26.3,
+	"min_travel_hours": 0.5,
+	"attendee_travel_hours": {
+		"Mumbai": 20.5,
+		"Shanghai": 4.6,
+		"Hong Kong": 13.7,
+		"Singapore": 2.1,
+		"Sydney": 23.9
+	}
+}]
