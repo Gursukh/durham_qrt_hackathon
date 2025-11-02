@@ -78,7 +78,8 @@ async function proxy(request: Request) {
     // If JSON, parse and return via NextResponse.json to preserve JSON content-type
     if (contentType.includes("application/json")) {
       const json = await res.json();
-      return NextResponse.json([json], { status: res.status, headers: responseHeaders });
+      console.log(json)
+      return NextResponse.json(json, { status: res.status, headers: responseHeaders });
     }
 
     // For other content-types return raw body

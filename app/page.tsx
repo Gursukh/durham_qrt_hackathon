@@ -22,6 +22,34 @@ export default function Home() {
   // modal input state
   const [jsonText, setJsonText] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // input mode: paste JSON or use form UI
+  const [inputMode, setInputMode] = useState<"json" | "form">("json");
+  // form state for manual input (name + optional attendee count). Coordinates are derived from `officies.json` when submitted.
+  const [formLocations, setFormLocations] = useState<Array<{ name: string; numAttendees?: number }>>([
+    { name: "", numAttendees: 0 },
+  ]);
+  const [formEventDuration, setFormEventDuration] = useState<{ days?: number; hours?: number; minutes?: number }>({});
+  const [formAvailability, setFormAvailability] = useState<{ start?: string; end?: string }>({});
+  const MAX_LOCATIONS = 13;
+
+  // helper to format stored availability strings into a value acceptable by
+  // <input type="datetime-local" /> which expects "YYYY-MM-DDTHH:MM" (no timezone)
+  const availabilityToInput = (s?: string) => {
+    if (!s) return "";
+    try {
+      const d = parseDate(s);
+      if (!d) return "";
+      // Convert to local YYYY-MM-DDTHH:MM
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      const hour = String(d.getHours()).padStart(2, "0");
+      const minute = String(d.getMinutes()).padStart(2, "0");
+      return `${year}-${month}-${day}T${hour}:${minute}`;
+    } catch (e) {
+      return "";
+    }
+  };
 
   // when selectedId changes, show details panel; clearing selectedId hides it
   useEffect(() => {
@@ -49,7 +77,7 @@ export default function Home() {
               setJsonText("");
               setShowSetup(true);
             }}
-            className="px-3 py-2 rounded bg-sky-600 text-white text-sm shadow"
+            className="px-4 py-2 rounded-xl bg-sky-600 text-white text-2xl font-semibold"
           >
             Setup meeting
           </button>
@@ -58,22 +86,143 @@ export default function Home() {
 
       {/* Modal: paste JSON to load into context */}
       {showSetup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center text-black">
+        <div className="fixed inset-0 z-50 flex items-center justify-center text-black backdrop-blur-md">
           <div className="absolute inset-0 bg-black/40" onClick={() => setShowSetup(false)} />
-          <div className="relative w-[min(90vw,700px)] bg-white rounded shadow-lg p-4">
+          <div className="relative w-[min(90vw,700px)] bg-white rounded-xl shadow-lg p-4">
             <div className="flex items-center justify-between mb-2">
               <div className="text-lg font-semibold">Setup meeting JSON</div>
               <button className="text-sm text-gray-500" onClick={() => setShowSetup(false)}>✕</button>
             </div>
 
             <div className="mb-2">
+              <div className="flex gap-2 mb-2">
+                <button
+                  className={`px-3 py-1 rounded ${inputMode === "json" ? "bg-sky-600 text-white" : "border text-sm"}`}
+                  onClick={() => setInputMode("json")}
+                >
+                  Paste JSON
+                </button>
+                <button
+                  className={`px-3 py-1 rounded ${inputMode === "form" ? "bg-sky-600 text-white" : "border text-sm"}`}
+                  onClick={() => setInputMode("form")}
+                >
+                  Fill form
+                </button>
+              </div>
               <div className="text-xs text-gray-600 mb-1">Paste an array of starting locations (or an object containing a startingLocations array)</div>
-              <textarea
-                value={jsonText}
-                onChange={(e) => setJsonText(e.target.value)}
-                className="w-full h-40 border p-2 text-xs"
-                placeholder='e.g. [{"name":"Office","coordinates":[51.5,-0.1],"numAttendees":3}]'
-              />
+              {inputMode === "json" ? (
+                <textarea
+                  value={jsonText}
+                  onChange={(e) => setJsonText(e.target.value)}
+                  className="w-full h-40 border p-2 text-xs"
+                  placeholder='e.g. [{"name":"Office","coordinates":[51.5,-0.1],"numAttendees":3}]'
+                />
+              ) : (
+                <div className="w-full border p-2 text-xs space-y-2 bg-gray-50 rounded">
+                  <div className="font-medium">Starting locations <span className="text-xs text-gray-500">({formLocations.length}/{MAX_LOCATIONS})</span></div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {formLocations.map((loc, idx) => (
+                      <div key={idx} className="p-2 border rounded bg-white flex items-center justify-between gap-2">
+                        <select
+                          className="flex-1 border px-2 py-1 text-xs"
+                          value={loc.name ?? ""}
+                          onChange={(e) => {
+                            const copy = [...formLocations];
+                            copy[idx] = { ...copy[idx], name: e.target.value };
+                            setFormLocations(copy);
+                          }}
+                        >
+                          <option value="">-- select office --</option>
+                          {
+                            // compute options that aren't already selected by other rows
+                            Object.keys(officies)
+                              .filter((k) => !formLocations.some((f, i2) => i2 !== idx && f.name === k))
+                              .map((k) => (
+                                <option key={k} value={k}>{k}</option>
+                              ))
+                          }
+                        </select>
+                        <input
+                          className="w-20 border px-2 py-1 text-xs"
+                          placeholder="#"
+                          value={String(loc.numAttendees ?? 0)}
+                          onChange={(e) => {
+                            const v = Number(e.target.value);
+                            const copy = [...formLocations];
+                            copy[idx] = { ...copy[idx], numAttendees: isNaN(v) ? 0 : Math.max(0, Math.floor(v)) };
+                            setFormLocations(copy);
+                          }}
+                        />
+                        <button
+                          className="px-2 py-1 text-xs border rounded"
+                          onClick={() => {
+                            const copy = [...formLocations];
+                            copy.splice(idx, 1);
+                            setFormLocations(copy.length ? copy : [{ name: "", numAttendees: 0 }]);
+                          }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <div>
+                    <button
+                      className={`px-3 py-1 rounded ${formLocations.length >= MAX_LOCATIONS ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-gray-200 text-xs'}`}
+                      onClick={() => {
+                        if (formLocations.length >= MAX_LOCATIONS) return;
+                        setFormLocations([...formLocations, { name: "", numAttendees: 0 }]);
+                      }}
+                      disabled={formLocations.length >= MAX_LOCATIONS}
+                    >
+                      + Add location
+                    </button>
+                    <button
+                      className="ml-2 px-3 py-1 rounded bg-gray-200 text-xs"
+                      onClick={() => {
+                        // populate with all offices from officies.json
+                        const all = Object.keys(officies).map((k) => ({ name: k, numAttendees: 0 }));
+                        // cap to MAX_LOCATIONS
+                        const capped = all.slice(0, MAX_LOCATIONS);
+                        setFormLocations(capped.length ? capped : [{ name: "", numAttendees: 0 }]);
+                      }}
+                    >
+                      Use all offices
+                    </button>
+                  </div>
+
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <div>
+                      <div className="text-xs font-medium">Event duration</div>
+                      <div className="grid grid-cols-[2fr_1fr_1fr] w-full gap-2 mt-1">
+                        <input className="border px-2 py-1 text-xs w-full" placeholder="days" value={String(formEventDuration.days ?? "")} onChange={(e) => setFormEventDuration({ ...formEventDuration, days: e.target.value === "" ? undefined : Number(e.target.value) })} />
+                        <input className="border px-2 py-1 text-xs w-full" placeholder="hours" value={String(formEventDuration.hours ?? "")} onChange={(e) => setFormEventDuration({ ...formEventDuration, hours: e.target.value === "" ? undefined : Number(e.target.value) })} />
+                        <input className="border px-2 py-1 text-xs w-full" placeholder="minutes" value={String(formEventDuration.minutes ?? "")} onChange={(e) => setFormEventDuration({ ...formEventDuration, minutes: e.target.value === "" ? undefined : Number(e.target.value) })} />
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-xs font-medium">Availability window</div>
+                      <div className="flex flex-col mt-1 text-xs">
+                        <input
+                          type="datetime-local"
+                          className="border px-2 py-1 mb-1"
+                          placeholder="start"
+                          value={availabilityToInput(formAvailability.start)}
+                          onChange={(e) => setFormAvailability({ ...formAvailability, start: e.target.value })}
+                        />
+                        <input
+                          type="datetime-local"
+                          className="border px-2 py-1"
+                          placeholder="end"
+                          value={availabilityToInput(formAvailability.end)}
+                          onChange={(e) => setFormAvailability({ ...formAvailability, end: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
               {error && <div className="text-sm text-red-600 mt-2">{error}</div>}
             </div>
 
@@ -88,8 +237,60 @@ export default function Home() {
                 onClick={async () => {
                   setError(null);
                   setIsProcessing(true);
+                  setSelectedId(null); // clear any existing selection
                   try {
-                    const parsed = JSON.parse(jsonText);
+                    // construct parsed input depending on selected mode
+                    let parsed: any = null;
+                    if (inputMode === "json") {
+                      parsed = JSON.parse(jsonText);
+                    } else {
+                      // build object from form state; derive coordinates from officies.json where possible
+                      // For availability window, convert datetime-local strings to full ISO timestamps
+                      const avail = {
+                        start: formAvailability.start ? new Date(formAvailability.start).toISOString() : undefined,
+                        end: formAvailability.end ? new Date(formAvailability.end).toISOString() : undefined,
+                      };
+
+                      // Validate that the event duration fits inside the availability window
+                      try {
+                        if (avail.start && avail.end) {
+                          const s = new Date(avail.start);
+                          const e = new Date(avail.end);
+                          const windowMs = e.getTime() - s.getTime();
+                          if (isNaN(windowMs) || windowMs <= 0) {
+                            setError("Availability window must have a valid start and end where end is after start.");
+                            setIsProcessing(false);
+                            return;
+                          }
+
+                          const days = Number(formEventDuration.days) || 0;
+                          const hours = Number(formEventDuration.hours) || 0;
+                          const minutes = Number(formEventDuration.minutes) || 0;
+                          const durMs = ((days * 24 + hours) * 60 + minutes) * 60 * 1000;
+
+                          if (durMs > 0 && durMs > windowMs) {
+                            setError("Event duration is longer than the availability window. Shorten the duration or extend the availability window.");
+                            setIsProcessing(false);
+                            return;
+                          }
+                        }
+                      } catch (err) {
+                        // If anything goes wrong parsing dates, bail with an error
+                        setError("Unable to validate availability window / event duration. Check date inputs.");
+                        setIsProcessing(false);
+                        return;
+                      }
+
+                      parsed = {
+                        startingLocations: formLocations.map((it) => {
+                          const office = (officies as any)[it.name];
+                          const coords = office ? ([Number(office.lat), Number(office.long)] as [number, number]) : ([0, 0] as [number, number]);
+                          return { name: it.name, coordinates: coords, numAttendees: Number(it.numAttendees) || 0 };
+                        }),
+                        event_duration: formEventDuration,
+                        availability_window: avail,
+                      };
+                    }
 
                     // If input is already an array of starting locations, use it
                     if (Array.isArray(parsed)) {
@@ -150,7 +351,48 @@ export default function Home() {
                         coordinates: [Number(it.coordinates[0]), Number(it.coordinates[1])] as [number, number],
                         numAttendees: Number(it.numAttendees) || 0,
                       }));
+                      // Always set starting locations locally
                       setStartingLocations(shaped);
+
+                      // If this came from the form UI, POST the parsed payload to /api/round
+                      if (inputMode === "form") {
+                        try {
+                          const res = await fetch("/api/round", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(parsed),
+                          });
+                          if (!res.ok) {
+                            const txt = await res.text();
+                            setError(`Round API error: ${res.status} ${txt}`);
+                            setIsProcessing(false);
+                            return;
+                          }
+
+                          const roundResp = await res.json();
+                          if (!Array.isArray(roundResp)) {
+                            setError("Round response was not an array of locations.");
+                            setIsProcessing(false);
+                            return;
+                          }
+
+                          const newLocs = roundResp.map((feat: any, i: number) => ({ id: String(i), ...feat }));
+                          setLocations(newLocs);
+                          // store original parsed input for summary modal
+                          setLastSetupJson(parsed);
+                          setShowSetup(false);
+                          setShowSummaryModal(true);
+                          setShowSetupButton(false);
+                          setIsProcessing(false);
+                          return;
+                        } catch (err: any) {
+                          setError(String(err?.message ?? err));
+                          setIsProcessing(false);
+                          return;
+                        }
+                      }
+
+                      // Otherwise (not form mode) just show the summary modal locally
                       setLastSetupJson(parsed);
                       setShowSetup(false);
                       setShowSummaryModal(true);
@@ -192,6 +434,9 @@ export default function Home() {
                           headers: { "Content-Type": "application/json" },
                           body: JSON.stringify(parsed),
                         });
+
+                        
+
                         if (!res.ok) {
                           const txt = await res.text();
                           setError(`Round API error: ${res.status} ${txt}`);

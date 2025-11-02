@@ -44,28 +44,39 @@ function PolylineTooltip({ start, selected }: { start: any; selected: any }) {
     const travelTimeStringHoursMins = (selected.attendee_travel_hours[start.name] != null)
       ? `${Math.floor(selected.attendee_travel_hours[start.name] ?? 0)}h ${Math.floor((selected.attendee_travel_hours[start.name] ?? 0) * 60) % 60}m`
       : "N/A";
+    const isZurichGeneva = (startName === "Zurich" && selectedName === "Geneva" ) || (startName === "Geneva" && selectedName === "Zurich");
     return (
         <>
             <div className="flex justify-center items-center gap-4 text-black">
                 <div className="font-semibold text-sm ">{startName}</div>
-                <svg fill="#000000" version="1.1"
-                    width="32px" height="32px" viewBox="0 0 371.656 371.656">
-                    <g>
+                {isZurichGeneva ? (
+                    // simple train icon for Zurich -> Geneva special case
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="2" y="6" width="20" height="10" rx="2" ry="2" fill="#000" />
+                        <circle cx="7" cy="18" r="1.5" fill="#000" />
+                        <circle cx="17" cy="18" r="1.5" fill="#000" />
+                        <rect x="5" y="8" width="6" height="4" fill="#fff" />
+                    </svg>
+                ) : (
+                    <svg fill="#000000" version="1.1"
+                        width="32px" height="32px" viewBox="0 0 371.656 371.656">
                         <g>
                             <g>
-                                <path d="M37.833,212.348c-0.01,0.006-0.021,0.01-0.032,0.017c-4.027,2.093-5.776,6.929-4.015,11.114
-				c1.766,4.199,6.465,6.33,10.787,4.892l121.85-40.541l-22.784,37.207c-1.655,2.703-1.305,6.178,0.856,8.497
-				c2.161,2.318,5.603,2.912,8.417,1.449l23.894-12.416c0.686-0.356,1.309-0.823,1.844-1.383l70.785-73.941l87.358-45.582
-				c33.085-17.835,29.252-31.545,27.29-35.321c-1.521-2.928-4.922-6.854-12.479-8.93c-7.665-2.106-18.021-1.938-31.653,0.514
-				c-4.551,0.818-7.063,0.749-9.723,0.676c-9.351-0.256-15.694,0.371-47.188,16.736L90.788,164.851l-66.8-34.668
-				c-2.519-1.307-5.516-1.306-8.035,0.004l-11.256,5.85c-2.317,1.204-3.972,3.383-4.51,5.938c-0.538,2.556,0.098,5.218,1.732,7.253
-				l46.364,57.749L37.833,212.348z"/>
-                                <path d="M355.052,282.501H28.948c-9.17,0-16.604,7.436-16.604,16.604s7.434,16.604,16.604,16.604h326.104
-				c9.17,0,16.604-7.434,16.604-16.604C371.655,289.934,364.222,282.501,355.052,282.501z"/>
+                                <g>
+                                    <path d="M37.833,212.348c-0.01,0.006-0.021,0.01-0.032,0.017c-4.027,2.093-5.776,6.929-4.015,11.114
+                c1.766,4.199,6.465,6.33,10.787,4.892l121.85-40.541l-22.784,37.207c-1.655,2.703-1.305,6.178,0.856,8.497
+                c2.161,2.318,5.603,2.912,8.417,1.449l23.894-12.416c0.686-0.356,1.309-0.823,1.844-1.383l70.785-73.941l87.358-45.582
+                c33.085-17.835,29.252-31.545,27.29-35.321c-1.521-2.928-4.922-6.854-12.479-8.93c-7.665-2.106-18.021-1.938-31.653,0.514
+                c-4.551,0.818-7.063,0.749-9.723,0.676c-9.351-0.256-15.694,0.371-47.188,16.736L90.788,164.851l-66.8-34.668
+                c-2.519-1.307-5.516-1.306-8.035,0.004l-11.256,5.85c-2.317,1.204-3.972,3.383-4.51,5.938c-0.538,2.556,0.098,5.218,1.732,7.253
+                l46.364,57.749L37.833,212.348z"/>
+                                    <path d="M355.052,282.501H28.948c-9.17,0-16.604,7.436-16.604,16.604s7.434,16.604,16.604,16.604h326.104
+                c9.17,0,16.604-7.434,16.604-16.604C371.655,289.934,364.222,282.501,355.052,282.501z"/>
+                                </g>
                             </g>
                         </g>
-                    </g>
-                </svg>
+                    </svg>
+                )}
                 <div className="font-semibold text-sm ">{selectedName}</div>
             </div>
             <div className="flex text-black gap-2 mt-2">
@@ -376,15 +387,23 @@ export function FullscreenMap({
                     if (lat == null || lng == null) return;
                     const startPos = { lat, lng } as google.maps.LatLngLiteral;
 
-                    // compute arc (always bulging north)
-                    const path = computeArcPoints(startPos, selectedPos, 80, 0.25);
+                    // special-case: if the start is Zurich and the selected event is Geneva,
+                    // draw a straight line and show a train icon in the tooltip
+                    const isZurichGeneva = ((start.name === "Zurich") && (selected.event_location === "Geneva")) ||
+                                           ((start.name === "Geneva") && (selected.event_location === "Zurich"));
+
+                    // compute arc (always bulging north) unless this is the special-case
+                    const path = isZurichGeneva
+                        ? [startPos, selectedPos]
+                        : computeArcPoints(startPos, selectedPos, 80, 0.25);
 
                     const polyline = new google.maps.Polyline({
                         path,
+                        // keep as straight segment for Zurich->Geneva special case
                         geodesic: false,
                         strokeColor: "#a43ef7",
                         strokeOpacity: 0.9,
-                        strokeWeight: 5.0, 
+                        strokeWeight: 5.0,
                         map: mapRef.current!,
                     });
                     console.log(start.numAttendees)
