@@ -618,7 +618,7 @@ export default function Home() {
             {lastSetupJson && (lastSetupJson.availability_window || lastSetupJson.availabilityWindow) ? (
               <div className="mt-2 text-sm text-gray-700">
                 <div className="font-semibold">Availability window</div>
-                <div className="text-sm text-gray-600">{formatAvailabilityWindow(lastSetupJson.availability_window || lastSetupJson.availabilityWindow)}</div>
+                <div className="text-sm text-gray-600 whitespace-break-spaces">{formatAvailabilityWindow(lastSetupJson.availability_window || lastSetupJson.availabilityWindow)}</div>
               </div>
             ) : null}
 
@@ -808,7 +808,7 @@ function formatAvailabilityWindow(avail: any): string | null {
   const s = start ? fmt(start) : "N/A";
   const e = end ? fmt(end) : "N/A";
 
-  return `From, ${s}\n to ${e}`;
+  return `From, ${s}\nTo ${e}`;
 }
 
 function LocationListItem({ loc }: { loc: any }) {
