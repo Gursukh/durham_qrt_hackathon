@@ -3,10 +3,10 @@ import { readFile } from "fs/promises";
 import path from "path";
 
 // Target to proxy to. Can be overridden with PROXY_TARGET env var for flexibility.
-const TARGET = process.env.PROXY_TARGET ?? "http://localhost:5000/plan";
+const TARGET = process.env.PROXY_TARGET ?? "https://coreen-unseduced-thomasine.ngrok-free.dev/plan";
 
 // Debug flag: set the environment variable DEBUG=true (or DEBUG=1) to return sample.json
-const DEBUG = true
+const DEBUG = false
 
 const SAMPLE_PATH = path.join(process.cwd(), "sample.json");
 

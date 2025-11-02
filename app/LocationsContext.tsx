@@ -16,6 +16,17 @@ export type EventSpan = {
   end: string;
 };
 
+export type EventDuration = {
+  days?: number;
+  hours?: number;
+  minutes?: number;
+};
+
+export type AvailabilityWindow = {
+  start: string;
+  end: string;
+};
+
 export type EventSample = {
   event_location: string;
   event_dates: EventDates;
@@ -47,6 +58,11 @@ type LocationsContextValue = {
   setLocations: React.Dispatch<React.SetStateAction<any[]>>;
   startingLocations: StartingLocation[] | null;
   setStartingLocations: React.Dispatch<React.SetStateAction<StartingLocation[] | null>>;
+  // optional event metadata coming from setup JSON
+  eventDuration: EventDuration | null;
+  setEventDuration: React.Dispatch<React.SetStateAction<EventDuration | null>>;
+  availabilityWindow: AvailabilityWindow | null;
+  setAvailabilityWindow: React.Dispatch<React.SetStateAction<AvailabilityWindow | null>>;
   selectedId: string | null;
   setSelectedId: React.Dispatch<React.SetStateAction<string | null>>;
 };
@@ -62,10 +78,14 @@ export function LocationsProvider({ children }: { children: React.ReactNode }) {
   // start with null to indicate no starting locations configured yet
   const [startingLocations, setStartingLocations] = useState<StartingLocation[] | null>(null);
 
+  // store optional event metadata that may be supplied by the setup JSON
+  const [eventDuration, setEventDuration] = useState<EventDuration | null>(null);
+  const [availabilityWindow, setAvailabilityWindow] = useState<AvailabilityWindow | null>(null);
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   return (
-    <LocationsContext.Provider value={{ locations, setLocations, startingLocations, setStartingLocations, selectedId, setSelectedId }}>
+    <LocationsContext.Provider value={{ locations, setLocations, startingLocations, setStartingLocations, eventDuration, setEventDuration, availabilityWindow, setAvailabilityWindow, selectedId, setSelectedId }}>
       {children}
     </LocationsContext.Provider>
   );

@@ -2,12 +2,18 @@
 
 import { FullscreenMap } from "./FullScreenMap";
 import { useLocations } from "./LocationsContext";
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import officies from "../officies.json";
+import DetailsModal from "./DetailsModel";
+import { ordinalSuffix, parseDate, formatDateTimeNice, formatTimeOnly } from "./dateutils";
 
 export default function Home() {
-  const { locations, selectedId, setStartingLocations, setLocations, setSelectedId } = useLocations();
+  const { locations, selectedId, setStartingLocations, setLocations, setSelectedId, setEventDuration, setAvailabilityWindow } = useLocations();
   const [showSetup, setShowSetup] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
+  const [showSetupButton, setShowSetupButton] = useState(true);
+  const [lastSetupJson, setLastSetupJson] = useState<any>(null);
 
   // local UI state to orchestrate animations when opening/closing details
   const [detailsVisible, setDetailsVisible] = useState(false);
@@ -35,18 +41,20 @@ export default function Home() {
       <FullscreenMap />
 
       {/* Setup meeting button top-left */}
-      <div className="absolute top-8 left-8">
-        <button
-          onClick={() => {
-            setError(null);
-            setJsonText("");
-            setShowSetup(true);
-          }}
-          className="px-3 py-2 rounded bg-sky-600 text-white text-sm shadow"
-        >
-          Setup meeting
-        </button>
-      </div>
+      {showSetupButton && (
+        <div className="absolute top-8 left-8">
+          <button
+            onClick={() => {
+              setError(null);
+              setJsonText("");
+              setShowSetup(true);
+            }}
+            className="px-3 py-2 rounded bg-sky-600 text-white text-sm shadow"
+          >
+            Setup meeting
+          </button>
+        </div>
+      )}
 
       {/* Modal: paste JSON to load into context */}
       {showSetup && (
@@ -79,6 +87,7 @@ export default function Home() {
               <button
                 onClick={async () => {
                   setError(null);
+                  setIsProcessing(true);
                   try {
                     const parsed = JSON.parse(jsonText);
 
@@ -87,6 +96,7 @@ export default function Home() {
                       const ok = parsed.every((it: any) => it && typeof it.name === "string" && Array.isArray(it.coordinates) && it.coordinates.length === 2);
                       if (!ok) {
                         setError("Each starting location must have a `name` (string) and `coordinates` ([lat, lng]).");
+                        setIsProcessing(false);
                         return;
                       }
                       const shaped = parsed.map((it: any) => ({
@@ -95,8 +105,35 @@ export default function Home() {
                         numAttendees: Number(it.numAttendees) || 0,
                       }));
                       setStartingLocations(shaped);
+                      // store what was submitted and show summary modal
+                      setLastSetupJson(parsed);
                       setShowSetup(false);
+                      setShowSummaryModal(true);
+                      setShowSetupButton(false);
+                      setIsProcessing(false);
                       return;
+                    }
+
+                    // If parsed is an object, capture optional event metadata (duration / availability window)
+                    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+                      // support snake_case and camelCase keys
+                      const dur = parsed.event_duration || parsed.eventDuration || null;
+                      const avail = parsed.availability_window || parsed.availabilityWindow || null;
+                      if (dur && typeof setEventDuration === "function") {
+                        try {
+                          // coerce numeric fields where present
+                          setEventDuration({ days: Number(dur.days) || 0, hours: Number(dur.hours) || 0, minutes: dur.minutes != null ? Number(dur.minutes) : undefined });
+                        } catch (e) {
+                          // ignore malformed duration
+                        }
+                      }
+                      if (avail && typeof setAvailabilityWindow === "function") {
+                        try {
+                          setAvailabilityWindow({ start: String(avail.start), end: String(avail.end) });
+                        } catch (e) {
+                          // ignore malformed availability
+                        }
+                      }
                     }
 
                     // If object contains startingLocations/startLocations arrays, use them
@@ -105,6 +142,7 @@ export default function Home() {
                       const ok = arr.every((it: any) => it && typeof it.name === "string" && Array.isArray(it.coordinates) && it.coordinates.length === 2);
                       if (!ok) {
                         setError("Each starting location must have a `name` (string) and `coordinates` ([lat, lng]).");
+                        setIsProcessing(false);
                         return;
                       }
                       const shaped = arr.map((it: any) => ({
@@ -113,7 +151,11 @@ export default function Home() {
                         numAttendees: Number(it.numAttendees) || 0,
                       }));
                       setStartingLocations(shaped);
+                      setLastSetupJson(parsed);
                       setShowSetup(false);
+                      setShowSummaryModal(true);
+                      setShowSetupButton(false);
+                      setIsProcessing(false);
                       return;
                     }
 
@@ -136,6 +178,7 @@ export default function Home() {
 
                       if (shaped.length === 0) {
                         setError("No valid cities with office coordinates were found in `attendees`. Check city names match officies.json keys.");
+                        setIsProcessing(false);
                         return;
                       }
 
@@ -152,34 +195,131 @@ export default function Home() {
                         if (!res.ok) {
                           const txt = await res.text();
                           setError(`Round API error: ${res.status} ${txt}`);
+                          setIsProcessing(false);
                           return;
                         }
 
                         const roundResp = await res.json();
                         if (!Array.isArray(roundResp)) {
                           setError("Round response was not an array of locations.");
+                          setIsProcessing(false);
                           return;
                         }
 
                         const newLocs = roundResp.map((feat: any, i: number) => ({ id: String(i), ...feat }));
                         setLocations(newLocs);
+                        // store original parsed input for summary modal
+                        setLastSetupJson(parsed);
                         setShowSetup(false);
+                        setShowSummaryModal(true);
+                        setShowSetupButton(false);
+                        setIsProcessing(false);
                         return;
                       } catch (err: any) {
                         setError(String(err?.message ?? err));
+                        setIsProcessing(false);
                         return;
                       }
                     }
 
                     setError("JSON must be an array, an object with a `startingLocations` array, or an object with an `attendees` map.");
+                    setIsProcessing(false);
                   } catch (e: any) {
                     setError(String(e?.message ?? e));
+                    setIsProcessing(false);
                   }
                 }}
                 className="px-3 py-1 rounded bg-sky-600 text-white text-sm"
+                disabled={isProcessing}
               >
-                Confirm
+                {isProcessing ? "Loading..." : "Confirm"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Summary modal that replaces the setup button after successful confirm */}
+      {showSummaryModal && (
+        <div className="absolute top-8 w-fit left-8 backdrop-blur-2xl rounded-xl shadow-sm  p-4">
+          <div className="mx-auto text-center font-bold text-3xl text-shadow-xs mb-8">Meeting Setup</div>
+          <div className="bg-white p-3 rounded-xl">
+            {lastSetupJson == null ? (
+              <div className="text-sm text-gray-600">No setup data available.</div>
+            ) : Array.isArray(lastSetupJson) ? (
+              <div className="text-sm text-gray-700">
+                <div className="font-semibold mb-2">Starting locations</div>
+                <ul className="list-disc list-inside text-xs space-y-1 max-h-44 overflow-auto">
+                  {lastSetupJson.map((it: any, i: number) => (
+                    <React.Fragment key={i}>
+                      <span className="font-medium">{it.name || `Location ${i + 1}`}</span>
+                      {it.numAttendees != null ? <span className="text-gray-500"> — {it.numAttendees} attendees</span> : null}
+                      {Array.isArray(it.coordinates) ? (
+                        <div className="text-gray-500 text-xs">{Number(it.coordinates[0]).toFixed(5)}, {Number(it.coordinates[1]).toFixed(5)}</div>
+                      ) : null}
+                    </React.Fragment>
+                  ))}
+                </ul>
+              </div>
+            ) : lastSetupJson.attendees && typeof lastSetupJson.attendees === "object" ? (
+              <div className="text-sm text-gray-700">
+                <div className="font-semibold mb-2 text-lg">Attendees by city</div>
+                <ul className="grid grid-cols-2 text-md space-y-1 max-h-44 overflow-auto">
+                  {Object.entries(lastSetupJson.attendees).map(([city, v]: any, i) => {
+                    const count = Array.isArray(v) ? v.length : Number(v) || 0;
+                    return (
+                      <React.Fragment key={i}>
+                        <span className="font-medium">{city}</span>
+                        <span className="text-gray-500">{count} attendees</span>
+                      </React.Fragment>
+                    );
+                  })}
+                </ul>
+              </div>
+            ) : Array.isArray(lastSetupJson.startingLocations || lastSetupJson.startLocations) ? (
+              <div className="text-sm text-gray-700">
+                <div className="font-semibold mb-2">Starting locations</div>
+                <ul className="list-disc list-inside text-base space-y-1 max-h-44 overflow-auto">
+                  {(lastSetupJson.startingLocations || lastSetupJson.startLocations).map((it: any, i: number) => (
+                    <li key={i}>
+                      <span className="font-medium">{it.name || `Location ${i + 1}`}</span>
+                      {it.numAttendees != null ? <span className="text-gray-500"> — {it.numAttendees} attendees</span> : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <div className="text-xs text-gray-600">{JSON.stringify(lastSetupJson).slice(0, 600)}</div>
+            )}
+
+            {/* Event metadata (if provided) */}
+            {lastSetupJson && (lastSetupJson.event_duration || lastSetupJson.eventDuration) ? (
+              <div className="mt-3 text-base text-gray-700">
+                <div className="font-semibold">Event duration</div>
+                <div className="text-base text-gray-600">{formatEventDuration(lastSetupJson.event_duration || lastSetupJson.eventDuration) ?? JSON.stringify(lastSetupJson.event_duration || lastSetupJson.eventDuration)}</div>
+              </div>
+            ) : null}
+
+            {lastSetupJson && (lastSetupJson.availability_window || lastSetupJson.availabilityWindow) ? (
+              <div className="mt-2 text-sm text-gray-700">
+                <div className="font-semibold">Availability window</div>
+                <div className="text-sm text-gray-600">{formatAvailabilityWindow(lastSetupJson.availability_window || lastSetupJson.availabilityWindow)}</div>
+              </div>
+            ) : null}
+
+            <div className="flex gap-2 justify-end mt-4 text-black">
+              <button
+                className="px-3 py-1 rounded border text-sm"
+                onClick={() => {
+                  // re-open setup for editing
+                  setShowSummaryModal(false);
+                  setShowSetup(true);
+                  setShowSetupButton(true);
+                }}
+              >
+                Edit
+              </button>
+
             </div>
           </div>
         </div>
@@ -238,56 +378,63 @@ export default function Home() {
   );
 }
 
-// --- Date helpers: parse and format consistently across components ---
-function parseDate(s: any): Date | null {
-  if (!s) return null;
-  try {
-    const d = new Date(s);
-    return isNaN(d.getTime()) ? null : d;
-  } catch (e) {
-    return null;
-  }
-}
 
-function ordinalSuffix(n: number) {
-  const j = n % 10;
-  const k = n % 100;
-  if (j === 1 && k !== 11) return `${n}st`;
-  if (j === 2 && k !== 12) return `${n}nd`;
-  if (j === 3 && k !== 13) return `${n}rd`;
-  return `${n}th`;
-}
-
-/**
- * Format a Date as: "12th September 2205 4:05 PM"
- * If includeYear is false, the year is omitted: "12th September 4:05 PM"
- */
-function formatDateTimeNice(d: Date, includeYear = true) {
-  const day = ordinalSuffix(d.getDate());
-  // Use English month long name to match example
-  const month = d.toLocaleString("en-GB", { month: "long" });
-  const year = d.getFullYear();
-  const hour24 = d.getHours();
-  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
-  const minutes = String(d.getMinutes()).padStart(2, "0");
-  const ampm = hour24 >= 12 ? "PM" : "AM";
-  return includeYear
-    ? `${day} ${month} ${year} ${hour12}:${minutes} ${ampm}`
-    : `${day} ${month} ${hour12}:${minutes} ${ampm}`;
-}
-
-function formatTimeOnly(d: Date) {
-  const hour24 = d.getHours();
-  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
-  const minutes = String(d.getMinutes()).padStart(2, "0");
-  const ampm = hour24 >= 12 ? "PM" : "AM";
-  return `${hour12}:${minutes} ${ampm}`;
-}
 
 function formatDateOnly(d: Date, includeYear = true) {
   const day = ordinalSuffix(d.getDate());
   const month = d.toLocaleString("en-GB", { month: "long" });
   return includeYear ? `${day} ${month} ${d.getFullYear()}` : `${day} ${month}`;
+}
+
+// Format an event duration object into a human-readable string like
+// "1 day 2 hours 30 mins". Accepts objects of shape { days, hours, minutes }
+// or a string/number (returned/coerced accordingly). Returns null for null/undefined input.
+function formatEventDuration(d: any): string | null {
+  if (d == null) return null;
+  if (typeof d === "string") return d;
+
+  // If numeric, treat as minutes
+  if (typeof d === "number") {
+    const mins = Math.floor(d);
+    if (mins === 0) return "0 mins";
+    if (mins < 60) return `${mins} ${mins === 1 ? "min" : "mins"}`;
+    const hours = Math.floor(mins / 60);
+    const rem = mins % 60;
+    return rem ? `${hours} ${hours === 1 ? "hour" : "hours"} ${rem} ${rem === 1 ? "min" : "mins"}` : `${hours} ${hours === 1 ? "hour" : "hours"}`;
+  }
+
+  // Coerce numeric-like fields where present
+  const days = Number(d.days) || 0;
+  const hours = Number(d.hours) || 0;
+  const minutes = d.minutes != null ? Math.floor(Number(d.minutes) || 0) : 0;
+
+  const parts: string[] = [];
+  if (days) parts.push(`${days} ${days === 1 ? "day" : "days"}`);
+  if (hours) parts.push(`${hours} ${hours === 1 ? "hour" : "hours"}`);
+  if (minutes) parts.push(`${minutes} ${minutes === 1 ? "min" : "mins"}`);
+
+  if (parts.length === 0) return "0 mins";
+  return parts.join(" ");
+}
+
+// Format availability window into: "From, DD:MM:YY HH:MM to DD:MM:YY HH:MM"
+function formatAvailabilityWindow(avail: any): string | null {
+  if (!avail) return null;
+  // support strings or objects with start/end
+  const maybe = typeof avail === "string" ? { start: avail, end: null } : avail;
+  const start = parseDate(maybe.start);
+  const end = parseDate(maybe.end);
+
+  // If we couldn't parse either side, fall back to JSON
+  if (!start && !end) return JSON.stringify(avail);
+
+  const two = (n: number) => String(n).padStart(2, "0");
+  const fmt = (d: Date) => `${two(d.getDate())}/${two(d.getMonth() + 1)}/${String(d.getFullYear()).slice(-2)} ${two(d.getHours())}:${two(d.getMinutes())}`;
+
+  const s = start ? fmt(start) : "N/A";
+  const e = end ? fmt(end) : "N/A";
+
+  return `From, ${s} to ${e}`;
 }
 
 function LocationListItem({ loc }: { loc: any }) {
@@ -380,95 +527,5 @@ function LocationListItem({ loc }: { loc: any }) {
         }</div>
       </div>
     </button>
-  );
-}
-
-function DetailsModal({ onClose, closing }: { onClose: () => void; closing?: boolean }) {
-  const { locations, startingLocations, selectedId } = useLocations();
-  const loc = locations.find((l) => l.id === selectedId);
-
-
-
-  if (!loc) return null;
-
-  const office = (officies as any)[loc.event_location];
-
-  const _rawStart = loc?.event_dates?.start ?? loc?.start ?? null;
-  const _rawEnd = loc?.event_dates?.end ?? loc?.end ?? null;
-  const ds = parseDate(_rawStart);
-  const de = parseDate(_rawEnd);
-  const ss = parseDate(loc?.event_span?.start ?? null);
-  const se = parseDate(loc?.event_span?.end ?? null);
-
-  return (
-    <div className="flex flex-col gap-2 p ">
-      <div className="flex items-center justify-between mb-7">
-        <button
-          onClick={onClose}
-          className="text-sm text-sky-600 hover:underline bg-white rounded-full px-2 py-1 flex items-center"
-        >
-          {"< Back"}
-        </button>
-        <div className=" flex-1 text-center text-xl text-white font-bold text-shadow-xs">{loc.event_location}</div>
-      </div>
-
-      <div className="bg-white rounded-xl p-4 py-2">
-        <div className="pt-1">
-          <div className="text-base font-semibold text-black mb-2">{"Address"}</div>
-          <div className="text-sm text-gray-700">{office.line1}</div>
-          <div className="text-sm text-gray-700">{`${office.postcode}, ${office.town}`}</div>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl p-4 py-2">
-        <div className="pt-1">
-          <div className="text-base font-semibold text-black mb-2">{"Schedule"}</div>
-          <div className="text-sm grid grid-cols-[auto_auto]">
-            <div className="text-sm text-gray-700 font-bold">{"Event Start "} </div>
-            <div className="ml-auto text-gray-600"> {ds ? formatDateTimeNice(ds, true) : (loc.event_dates?.start ?? "N/A")}</div>
-            <div className="text-sm text-gray-700 font-bold">{"Event End "} </div>
-            <div className=" mb-4 ml-auto text-gray-600"> {de ? formatDateTimeNice(de, true) : (loc.event_dates?.end ?? "N/A")}</div>
-            <div className="text-sm text-gray-700 font-bold">{"Span Start "} </div>
-            <div className="ml-auto text-gray-600"> {ss ? formatDateTimeNice(ss, true) : (loc.event_span?.start ?? "N/A")}</div>
-            <div className="text-sm text-gray-700 font-bold">{"Span End "} </div>
-            <div className="ml-auto text-gray-600"> {se ? formatDateTimeNice(se, true) : (loc.event_span?.end ?? "N/A")}</div>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl p-4 py-2">
-        <div className="pt-1">
-          <div className="text-base font-semibold text-black mb-2">{"Total Carbon Dioxide Emissions"}</div>
-
-          <div className="text-2xl w-fit ml-auto text-gray-700">{loc.total_co2 != null ? loc.total_co2.toFixed(2) + " kg CO₂" : "N/A"}</div>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl p-4 py-2">
-        <div className="pt-1">
-          <div className="text-base font-semibold text-black mb-2">{"Travelers"}</div>
-          {startingLocations && startingLocations.map((startLoc, idx) => {
-            // find matching starting location info from loc.starting_locations by name
-            const matchingLoc = (loc.starting_locations as any[] || []).find((l) => l.name === startLoc.name);
-            const travelHours = matchingLoc?.travel_hours;
-            const co2 = matchingLoc?.total_co2;
-
-            return (
-              <div key={idx} className="mb-4 last:mb-0">
-                <div className="font-bold text-gray-800">{`${startLoc.name}, ${startLoc.numAttendees} attendees`}</div>
-                <div className="flex justify-between">
-                  <div className="text-sm text-gray-600">
-                    Average Travel Time: {travelHours != null ? travelHours.toFixed(2) + " hrs" : "N/A"}
-                  </div>
-                  <div className="text-sm text-gray-600">
-                    Total CO₂: {co2 != null ? co2.toFixed(2) + " kg" : "N/A"}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
   );
 }

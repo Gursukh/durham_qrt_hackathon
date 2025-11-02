@@ -40,8 +40,10 @@ function StartTooltip({ count, name }: { count: number; name: string }) {
 
 function PolylineTooltip({ start, selected }: { start: any; selected: any }) {
     const startName = start.name || "";
-    const selectedName = selected.name || "";
-    const numAttendees = (start as any).numAttendees ?? 0;
+    const selectedName = selected.event_location || "";
+    const travelTimeStringHoursMins = (selected.attendee_travel_hours[start.name] != null)
+      ? `${Math.floor(selected.attendee_travel_hours[start.name] ?? 0)}h ${Math.floor((selected.attendee_travel_hours[start.name] ?? 0) * 60) % 60}m`
+      : "N/A";
     return (
         <>
             <div className="flex justify-center items-center gap-4 text-black">
@@ -68,7 +70,7 @@ function PolylineTooltip({ start, selected }: { start: any; selected: any }) {
             </div>
             <div className="flex text-black gap-2 mt-2">
                 <div className="font-bold">{"Travel Hours"}</div>
-                <div className="font-bold">{selected.attendee_travel_hours[start.name] ?? "N/A"}</div>
+                <div className="font-bold">{travelTimeStringHoursMins}</div>
             </div>
         </>
     );

@@ -46,3 +46,7 @@ body {
 .panel {
   @apply bg-white rounded shadow-lg
 }
+
+button {
+  @apply cursor-pointer;
+}
